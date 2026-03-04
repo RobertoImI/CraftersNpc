@@ -1,0 +1,78 @@
+package org.crafterscr.craftersnpc;
+
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.saveddata.SavedData;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public class RouteStorage extends SavedData {
+    private static final String DATA_NAME = "craftersnpc_routes";
+    private final Map<String, List<RoutePoint>> routes = new HashMap<>();
+
+    public static RouteStorage get(ServerLevel level) {
+        return level.getServer().overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(RouteStorage::new, RouteStorage::load), DATA_NAME);
+    }
+
+    public void saveRoute(String routeId, List<RoutePoint> points) {
+        routes.put(routeId, List.copyOf(points));
+        setDirty();
+    }
+
+    public List<RoutePoint> getRoute(String routeId) {
+        return routes.getOrDefault(routeId, List.of());
+    }
+
+    public Set<String> routeIds() {
+        return routes.keySet();
+    }
+
+    public boolean hasRoute(String routeId) {
+        return routes.containsKey(routeId);
+    }
+
+    public static RouteStorage load(CompoundTag tag, HolderLookup.Provider registries) {
+        RouteStorage storage = new RouteStorage();
+        CompoundTag routesTag = tag.getCompound("Routes");
+        for (String key : routesTag.getAllKeys()) {
+            ListTag points = routesTag.getList(key, Tag.TAG_COMPOUND);
+            List<RoutePoint> routePoints = new ArrayList<>();
+            for (Tag pointTag : points) {
+                CompoundTag point = (CompoundTag) pointTag;
+                routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), Mth.clamp(point.getInt("Wait"), 0, 3600 * 20)));
+            }
+            storage.routes.put(key, routePoints);
+        }
+        return storage;
+    }
+
+    @Override
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        CompoundTag routesTag = new CompoundTag();
+        routes.forEach((key, value) -> {
+            ListTag points = new ListTag();
+            for (RoutePoint point : value) {
+                CompoundTag pointTag = new CompoundTag();
+                pointTag.putDouble("X", point.x());
+                pointTag.putDouble("Y", point.y());
+                pointTag.putDouble("Z", point.z());
+                pointTag.putInt("Wait", point.waitTicks());
+                points.add(pointTag);
+            }
+            routesTag.put(key, points);
+        });
+        tag.put("Routes", routesTag);
+        return tag;
+    }
+
+    public record RoutePoint(double x, double y, double z, int waitTicks) {
+    }
+}

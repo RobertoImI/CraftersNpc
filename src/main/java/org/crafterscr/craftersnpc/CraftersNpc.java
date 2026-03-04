@@ -7,6 +7,8 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.slf4j.Logger;
 
 @Mod(CraftersNpc.MODID)
@@ -21,6 +23,8 @@ public class CraftersNpc {
             CraftersNpcClient.register(modEventBus);
         }
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(RouteWandManager::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(RouteWandManager::onPlayerTick);
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {

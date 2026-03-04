@@ -1,21 +1,27 @@
 package org.crafterscr.craftersnpc;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.Optional;
 
 public final class CnpcCommands {
@@ -29,57 +35,157 @@ public final class CnpcCommands {
         dispatcher.register(Commands.literal("cnpc")
             .requires(source -> source.hasPermission(2))
             .then(Commands.literal("create")
-                .executes(CnpcCommands::createNpc))
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                    .then(Commands.literal("steve").executes(ctx -> createNpc(ctx, false)))
+                    .then(Commands.literal("alex").executes(ctx -> createNpc(ctx, true)))))
             .then(Commands.literal("skin")
                 .then(Commands.argument("skin", StringArgumentType.word())
-                    .executes(ctx -> setSkin(ctx, StringArgumentType.getString(ctx, "skin")))))
+                    .suggests((ctx, builder) -> suggestSkins(builder))
+                    .executes(ctx -> setSkinLooked(ctx, StringArgumentType.getString(ctx, "skin")))))
+            .then(Commands.literal("npc")
+                .then(Commands.literal("skin")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .then(Commands.argument("skin", StringArgumentType.word())
+                            .suggests((ctx, builder) -> suggestSkins(builder))
+                            .executes(ctx -> setSkinById(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "skin"))))))
+                .then(Commands.literal("route")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .then(Commands.argument("routeId", StringArgumentType.word())
+                            .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
+                            .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId")))))))
             .then(Commands.literal("route")
-                .then(Commands.literal("add")
-                    .then(Commands.argument("waitSeconds", IntegerArgumentType.integer(0, 3600))
-                        .executes(ctx -> addWaypoint(ctx, IntegerArgumentType.getInteger(ctx, "waitSeconds")))))
+                .then(Commands.literal("edit")
+                    .then(Commands.argument("routeId", StringArgumentType.word())
+                        .executes(ctx -> editRoute(ctx, StringArgumentType.getString(ctx, "routeId")))))
+                .then(Commands.literal("save")
+                    .executes(CnpcCommands::saveRoute))
+                .then(Commands.literal("cancel")
+                    .executes(CnpcCommands::cancelRoute))
+                .then(Commands.literal("list")
+                    .executes(CnpcCommands::listRoutes)))
+            .then(Commands.literal("wand")
+                .then(Commands.literal("set")
+                    .executes(CnpcCommands::setWand))
                 .then(Commands.literal("clear")
-                    .executes(CnpcCommands::clearRoute))
-                .then(Commands.literal("start")
-                    .executes(ctx -> setRoute(ctx, true)))
-                .then(Commands.literal("stop")
-                    .executes(ctx -> setRoute(ctx, false)))));
+                    .executes(CnpcCommands::clearWand))));
     }
 
-    private static int createNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+    private static int createNpc(CommandContext<CommandSourceStack> context, boolean slimModel) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Vec3 spawnPos = player.position();
-        CnpcEntity.spawn(player.serverLevel(), spawnPos);
-        context.getSource().sendSuccess(() -> Component.literal("CNPC creado."), true);
+        String npcId = StringArgumentType.getString(context, "npcId").toLowerCase(Locale.ROOT);
+        if (findNpcById(player.serverLevel(), npcId).isPresent()) {
+            context.getSource().sendFailure(Component.literal("Ya existe un NPC con ID: " + npcId));
+            return 0;
+        }
+        CnpcEntity.spawn(player.serverLevel(), player.position(), npcId, slimModel);
+        context.getSource().sendSuccess(() -> Component.literal("CNPC creado con ID " + npcId + " y modelo " + (slimModel ? "alex" : "steve")), true);
         return 1;
     }
 
-    private static int setSkin(CommandContext<CommandSourceStack> context, String skin) throws CommandSyntaxException {
+    private static int setSkinLooked(CommandContext<CommandSourceStack> context, String skin) throws CommandSyntaxException {
         CnpcEntity npc = requireLookedNpc(context);
         npc.setSkinId(skin);
         context.getSource().sendSuccess(() -> Component.literal("Skin del CNPC cambiada a: " + skin), true);
         return 1;
     }
 
-    private static int addWaypoint(CommandContext<CommandSourceStack> context, int waitSeconds) throws CommandSyntaxException {
+    private static int setSkinById(CommandContext<CommandSourceStack> context, String npcId, String skin) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        CnpcEntity npc = requireLookedNpc(context);
-        npc.addRoutePoint(player.position(), waitSeconds);
-        context.getSource().sendSuccess(() -> Component.literal("Punto agregado. Espera: " + waitSeconds + "s"), true);
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setSkinId(skin);
+        context.getSource().sendSuccess(() -> Component.literal("Skin de " + npcId + " actualizada a " + skin), true);
         return 1;
     }
 
-    private static int clearRoute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        CnpcEntity npc = requireLookedNpc(context);
-        npc.clearRoute();
-        context.getSource().sendSuccess(() -> Component.literal("Ruta del CNPC limpiada."), true);
+    private static int editRoute(CommandContext<CommandSourceStack> context, String routeId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        RouteWandManager.startSession(player, routeId.toLowerCase(Locale.ROOT), storage.getRoute(routeId.toLowerCase(Locale.ROOT)));
+        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta " + routeId + " iniciada. Click derecho con la wand para agregar puntos, shift+click para borrar último."), false);
         return 1;
     }
 
-    private static int setRoute(CommandContext<CommandSourceStack> context, boolean enabled) throws CommandSyntaxException {
-        CnpcEntity npc = requireLookedNpc(context);
-        npc.setRouteEnabled(enabled);
-        context.getSource().sendSuccess(() -> Component.literal(enabled ? "Ruta iniciada." : "Ruta detenida."), true);
+    private static int saveRoute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<RouteWandManager.BuildSession> session = RouteWandManager.session(player);
+        if (session.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("No tienes una ruta en edición."));
+            return 0;
+        }
+        RouteStorage.get(player.serverLevel()).saveRoute(session.get().routeId(), session.get().points());
+        int size = session.get().points().size();
+        RouteWandManager.clearSession(player);
+        context.getSource().sendSuccess(() -> Component.literal("Ruta guardada con ID " + session.get().routeId() + " con " + size + " puntos."), true);
         return 1;
+    }
+
+    private static int cancelRoute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteWandManager.clearSession(player);
+        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta cancelada."), false);
+        return 1;
+    }
+
+    private static int listRoutes(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        String ids = storage.routeIds().stream().sorted().reduce((a, b) -> a + ", " + b).orElse("(sin rutas)");
+        context.getSource().sendSuccess(() -> Component.literal("Rutas: " + ids), false);
+        return 1;
+    }
+
+    private static int assignRoute(CommandContext<CommandSourceStack> context, String npcId, String routeId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        if (!storage.hasRoute(routeId)) {
+            context.getSource().sendFailure(Component.literal("No existe ruta: " + routeId));
+            return 0;
+        }
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setAssignedRouteId(routeId);
+        npc.get().setRouteEnabled(true);
+        context.getSource().sendSuccess(() -> Component.literal("Ruta " + routeId + " asignada a NPC " + npcId), true);
+        return 1;
+    }
+
+    private static int setWand(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Debes sostener un item en la mano principal."));
+            return 0;
+        }
+        RouteWandManager.setWand(player, stack);
+        context.getSource().sendSuccess(() -> Component.literal("Wand configurada: " + RouteWandManager.getWandItemId(player)), false);
+        return 1;
+    }
+
+    private static int clearWand(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteWandManager.clearWand(player);
+        context.getSource().sendSuccess(() -> Component.literal("Wand removida."), false);
+        return 1;
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestSkins(SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(SkinDirectory.listSkins(), builder);
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestRoutes(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            return SharedSuggestionProvider.suggest(RouteStorage.get(player.serverLevel()).routeIds(), builder);
+        } catch (CommandSyntaxException e) {
+            return CompletableFuture.completedFuture(builder.build());
+        }
     }
 
     private static CnpcEntity requireLookedNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -93,6 +199,17 @@ public final class CnpcCommands {
             throw WRONG_ENTITY.create();
         }
         return npc;
+    }
+
+    private static Optional<CnpcEntity> findNpcById(ServerLevel level, String npcId) {
+        for (ServerLevel serverLevel : level.getServer().getAllLevels()) {
+            for (Entity entity : serverLevel.getAllEntities()) {
+                if (entity instanceof CnpcEntity npc && npc.getNpcId().equalsIgnoreCase(npcId)) {
+                    return Optional.of(npc);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<EntityHitResult> raycastEntity(ServerPlayer player, double maxDistance) {

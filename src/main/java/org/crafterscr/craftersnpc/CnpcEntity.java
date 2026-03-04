@@ -24,6 +24,10 @@ import java.util.List;
 
 public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
+
     private final List<RoutePoint> route = new ArrayList<>();
     private int routeIndex;
     private boolean movingForward = true;
@@ -52,6 +56,9 @@ public class CnpcEntity extends PathfinderMob {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(SKIN_ID, "steve");
+        builder.define(NPC_ID, "");
+        builder.define(ROUTE_ID, "");
+        builder.define(SLIM_MODEL, false);
     }
 
     @Override
@@ -63,7 +70,14 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private void tickRoute() {
-        if (!routeEnabled || route.isEmpty()) return;
+        if (!routeEnabled) {
+            return;
+        }
+
+        List<RoutePoint> points = currentRoute();
+        if (points.isEmpty()) {
+            return;
+        }
 
         if (waitTicks > 0) {
             waitTicks--;
@@ -71,21 +85,35 @@ public class CnpcEntity extends PathfinderMob {
             return;
         }
 
-        RoutePoint point = route.get(routeIndex);
+        RoutePoint point = points.get(routeIndex);
         Vec3 center = point.pos().add(0.5D, 0.0D, 0.5D);
         if (distanceToSqr(center) <= 1.2D) {
             waitTicks = point.waitTicks();
-            advanceIndex();
+            advanceIndex(points.size());
         } else if (getNavigation().isDone()) {
             getNavigation().moveTo(center.x, center.y, center.z, 1.0D);
         }
     }
 
-    private void advanceIndex() {
-        if (route.size() <= 1) return;
+    private List<RoutePoint> currentRoute() {
+        if (level() instanceof ServerLevel serverLevel && !getAssignedRouteId().isBlank()) {
+            List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(getAssignedRouteId());
+            if (!stored.isEmpty()) {
+                return stored.stream()
+                    .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), p.waitTicks()))
+                    .toList();
+            }
+        }
+        return route;
+    }
+
+    private void advanceIndex(int size) {
+        if (size <= 1) {
+            return;
+        }
 
         if (movingForward) {
-            if (routeIndex >= route.size() - 1) {
+            if (routeIndex >= size - 1) {
                 movingForward = false;
                 routeIndex--;
             } else {
@@ -118,10 +146,6 @@ public class CnpcEntity extends PathfinderMob {
         this.routeEnabled = routeEnabled;
     }
 
-    public boolean isRouteEnabled() {
-        return routeEnabled;
-    }
-
     public String getSkinId() {
         return entityData.get(SKIN_ID);
     }
@@ -130,10 +154,40 @@ public class CnpcEntity extends PathfinderMob {
         entityData.set(SKIN_ID, skinId.toLowerCase());
     }
 
+    public void setNpcId(String npcId) {
+        entityData.set(NPC_ID, npcId.toLowerCase());
+    }
+
+    public String getNpcId() {
+        return entityData.get(NPC_ID);
+    }
+
+    public void setAssignedRouteId(String routeId) {
+        entityData.set(ROUTE_ID, routeId.toLowerCase());
+        routeIndex = 0;
+        movingForward = true;
+        waitTicks = 0;
+    }
+
+    public String getAssignedRouteId() {
+        return entityData.get(ROUTE_ID);
+    }
+
+    public boolean isSlimModel() {
+        return entityData.get(SLIM_MODEL);
+    }
+
+    public void setSlimModel(boolean slimModel) {
+        entityData.set(SLIM_MODEL, slimModel);
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putString("Skin", getSkinId());
+        tag.putString("NpcId", getNpcId());
+        tag.putString("RouteId", getAssignedRouteId());
+        tag.putBoolean("SlimModel", isSlimModel());
         tag.putBoolean("RouteEnabled", routeEnabled);
         tag.putInt("RouteIndex", routeIndex);
         tag.putBoolean("MovingForward", movingForward);
@@ -155,6 +209,9 @@ public class CnpcEntity extends PathfinderMob {
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         setSkinId(tag.getString("Skin"));
+        setNpcId(tag.getString("NpcId"));
+        setAssignedRouteId(tag.getString("RouteId"));
+        setSlimModel(tag.getBoolean("SlimModel"));
         routeEnabled = tag.getBoolean("RouteEnabled");
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
@@ -170,7 +227,6 @@ public class CnpcEntity extends PathfinderMob {
             routeIndex = Mth.clamp(routeIndex, 0, route.size() - 1);
         } else {
             routeIndex = 0;
-            routeEnabled = false;
         }
     }
 
@@ -179,12 +235,14 @@ public class CnpcEntity extends PathfinderMob {
         return false;
     }
 
-    public static CnpcEntity spawn(ServerLevel level, Vec3 pos) {
+    public static CnpcEntity spawn(ServerLevel level, Vec3 pos, String npcId, boolean slimModel) {
         CnpcEntity entity = ModEntities.CNPC.get().create(level);
         if (entity == null) {
             throw new IllegalStateException("No se pudo crear la entidad CNPC");
         }
         entity.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
+        entity.setNpcId(npcId);
+        entity.setSlimModel(slimModel);
         level.addFreshEntity(entity);
         return entity;
     }
