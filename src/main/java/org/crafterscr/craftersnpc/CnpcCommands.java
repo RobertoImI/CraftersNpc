@@ -160,7 +160,7 @@ public final class CnpcCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         ItemStack stack = player.getMainHandItem();
         if (stack.isEmpty()) {
-            context.getSource().sendFailure(Component.literal("Debes sostener un item en la mano principal."));
+            context.getSource().sendFailure(Component.literal("Debes sostener un item con la mano principal."));
             return 0;
         }
         RouteWandManager.setWand(player, stack);
