@@ -1,11 +1,11 @@
 package org.crafterscr.craftersnpc;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -47,12 +47,12 @@ public final class RouteWandManager {
         if (stack.isEmpty()) {
             return false;
         }
-        ResourceLocation held = Item.getId(stack.getItem());
+        ResourceLocation held = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return held != null && wandItem.equals(held.toString());
     }
 
     public static void setWand(ServerPlayer player, ItemStack stack) {
-        ResourceLocation id = Item.getId(stack.getItem());
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         player.getPersistentData().putString(WAND_KEY, id == null ? "" : id.toString());
     }
 
