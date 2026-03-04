@@ -19,6 +19,9 @@ import java.util.Comparator;
 import java.util.Optional;
 
 public final class CnpcCommands {
+    private static final SimpleCommandExceptionType MUST_LOOK_CNPC = new SimpleCommandExceptionType(Component.literal("Debes mirar un CNPC a menos de 8 bloques."));
+    private static final SimpleCommandExceptionType WRONG_ENTITY = new SimpleCommandExceptionType(Component.literal("La entidad observada no es un CNPC."));
+
     private CnpcCommands() {
     }
 
@@ -42,7 +45,7 @@ public final class CnpcCommands {
                     .executes(ctx -> setRoute(ctx, false)))));
     }
 
-    private static int createNpc(CommandContext<CommandSourceStack> context) {
+    private static int createNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Vec3 spawnPos = player.position();
         CnpcEntity.spawn(player.serverLevel(), spawnPos);
@@ -50,14 +53,14 @@ public final class CnpcCommands {
         return 1;
     }
 
-    private static int setSkin(CommandContext<CommandSourceStack> context, String skin) {
+    private static int setSkin(CommandContext<CommandSourceStack> context, String skin) throws CommandSyntaxException {
         CnpcEntity npc = requireLookedNpc(context);
         npc.setSkinId(skin);
         context.getSource().sendSuccess(() -> Component.literal("Skin del CNPC cambiada a: " + skin), true);
         return 1;
     }
 
-    private static int addWaypoint(CommandContext<CommandSourceStack> context, int waitSeconds) {
+    private static int addWaypoint(CommandContext<CommandSourceStack> context, int waitSeconds) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         CnpcEntity npc = requireLookedNpc(context);
         npc.addRoutePoint(player.position(), waitSeconds);
@@ -65,34 +68,25 @@ public final class CnpcCommands {
         return 1;
     }
 
-    private static int clearRoute(CommandContext<CommandSourceStack> context) {
+    private static int clearRoute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CnpcEntity npc = requireLookedNpc(context);
         npc.clearRoute();
         context.getSource().sendSuccess(() -> Component.literal("Ruta del CNPC limpiada."), true);
         return 1;
     }
 
-    private static int setRoute(CommandContext<CommandSourceStack> context, boolean enabled) {
+    private static int setRoute(CommandContext<CommandSourceStack> context, boolean enabled) throws CommandSyntaxException {
         CnpcEntity npc = requireLookedNpc(context);
         npc.setRouteEnabled(enabled);
         context.getSource().sendSuccess(() -> Component.literal(enabled ? "Ruta iniciada." : "Ruta detenida."), true);
         return 1;
     }
 
-    private static final SimpleCommandExceptionType MUST_BE_PLAYER = new SimpleCommandExceptionType(Component.literal("El comando requiere un jugador."));
-    private static final SimpleCommandExceptionType MUST_LOOK_CNCP = new SimpleCommandExceptionType(Component.literal("Debes mirar un CNPC a menos de 8 bloques."));
-    private static final SimpleCommandExceptionType WRONG_ENTITY = new SimpleCommandExceptionType(Component.literal("La entidad observada no es un CNPC."));
-
     private static CnpcEntity requireLookedNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ServerPlayer player;
-        try {
-            player = context.getSource().getPlayerOrException();
-        } catch (Exception e) {
-            throw MUST_BE_PLAYER.create();
-        }
+        ServerPlayer player = context.getSource().getPlayerOrException();
 
         EntityHitResult hitResult = raycastEntity(player, 8.0D)
-            .orElseThrow(() -> MUST_LOOK_CNCP.create());
+            .orElseThrow(MUST_LOOK_CNPC::create);
 
         Entity entity = hitResult.getEntity();
         if (!(entity instanceof CnpcEntity npc)) {

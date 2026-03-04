@@ -23,3 +23,4 @@ public final class ModEntities {
         modBus.addListener((EntityAttributeCreationEvent event) -> event.put(CNPC.get(), CnpcEntity.createAttributes().build()));
     }
 }
+
