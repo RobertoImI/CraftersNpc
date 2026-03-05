@@ -1,14 +1,16 @@
 package org.crafterscr.craftersnpc;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
@@ -39,12 +41,12 @@ public final class RouteWandManager {
     }
 
     public static boolean hasWandInHand(ServerPlayer player) {
+        return isWandStack(player, player.getMainHandItem());
+    }
+
+    private static boolean isWandStack(ServerPlayer player, ItemStack stack) {
         String wandItem = player.getPersistentData().getString(WAND_KEY);
-        if (wandItem.isBlank()) {
-            return false;
-        }
-        ItemStack stack = player.getMainHandItem();
-        if (stack.isEmpty()) {
+        if (wandItem.isBlank() || stack.isEmpty()) {
             return false;
         }
         ResourceLocation held = BuiltInRegistries.ITEM.getKey(stack.getItem());
@@ -82,27 +84,70 @@ public final class RouteWandManager {
         if (player.isShiftKeyDown()) {
             if (!session.points().isEmpty()) {
                 session.points().remove(session.points().size() - 1);
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("Último punto eliminado de ruta " + session.routeId()));
+                player.sendSystemMessage(Component.literal("Último punto eliminado de ruta " + session.routeId()));
             }
             return;
         }
-        session.points().add(new RouteStorage.RoutePoint(point.x, point.y, point.z, 0));
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("Punto agregado a ruta " + session.routeId() + " (#" + session.points().size() + ")"));
+
+        int waitTicks = session.getSelectedWaitSeconds() * 20;
+        session.points().add(new RouteStorage.RoutePoint(point.x, point.y, point.z, waitTicks));
+        player.sendSystemMessage(Component.literal("Punto agregado a ruta " + session.routeId() + " (#" + session.points().size() + ") espera " + session.getSelectedWaitSeconds() + "s"));
+    }
+
+    public static void onItemScroll(PlayerEvent.ItemHeldEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || !player.hasPermissions(2)) {
+            return;
+        }
+
+        BuildSession session = BUILD_SESSIONS.get(player.getUUID());
+        if (session == null) {
+            return;
+        }
+
+        ItemStack previousStack = player.getInventory().getItem(event.getPreviousSlot());
+        if (!isWandStack(player, previousStack)) {
+            return;
+        }
+
+        int direction = scrollDirection(event.getPreviousSlot(), event.getNewSlot());
+        if (direction == 0) {
+            return;
+        }
+
+        event.setCanceled(true);
+        player.getInventory().selected = event.getPreviousSlot();
+        session.adjustSelectedWaitSeconds(direction);
+        player.displayClientMessage(Component.literal("Espera por punto: " + session.getSelectedWaitSeconds() + "s"), true);
+    }
+
+    private static int scrollDirection(int previousSlot, int newSlot) {
+        int forward = Math.floorMod(newSlot - previousSlot, 9);
+        int backward = Math.floorMod(previousSlot - newSlot, 9);
+
+        if (forward == 0) {
+            return 0;
+        }
+        return forward <= backward ? 1 : -1;
     }
 
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        if (player.tickCount % 10 != 0 || !player.hasPermissions(2) || !hasWandInHand(player)) {
-            return;
-        }
+
         BuildSession session = BUILD_SESSIONS.get(player.getUUID());
-        if (session == null || session.points().isEmpty()) {
+        if (session == null) {
             return;
         }
 
-        Level level = player.level();
+        if (player.tickCount % 10 == 0 && player.hasPermissions(2) && hasWandInHand(player)) {
+            player.displayClientMessage(Component.literal("Editando ruta " + session.routeId() + " | espera: " + session.getSelectedWaitSeconds() + "s | puntos: " + session.points().size()), true);
+        }
+
+        if (player.tickCount % 10 != 0 || !player.hasPermissions(2) || !hasWandInHand(player) || session.points().isEmpty()) {
+            return;
+        }
+
         for (int i = 0; i < session.points().size(); i++) {
             RouteStorage.RoutePoint current = session.points().get(i);
             sendParticle(player, current.x(), current.y(), current.z());
@@ -129,6 +174,31 @@ public final class RouteWandManager {
         player.serverLevel().sendParticles(player, ParticleTypes.END_ROD, false, x, y, z, 1, 0.01D, 0.01D, 0.01D, 0.0D);
     }
 
-    public record BuildSession(String routeId, List<RouteStorage.RoutePoint> points) {
+    public static final class BuildSession {
+        private final String routeId;
+        private final List<RouteStorage.RoutePoint> points;
+        private int selectedWaitSeconds;
+
+        public BuildSession(String routeId, List<RouteStorage.RoutePoint> points) {
+            this.routeId = routeId;
+            this.points = points;
+            this.selectedWaitSeconds = 0;
+        }
+
+        public String routeId() {
+            return routeId;
+        }
+
+        public List<RouteStorage.RoutePoint> points() {
+            return points;
+        }
+
+        public int getSelectedWaitSeconds() {
+            return selectedWaitSeconds;
+        }
+
+        public void adjustSelectedWaitSeconds(int delta) {
+            selectedWaitSeconds = Mth.clamp(selectedWaitSeconds + delta, 0, 3600);
+        }
     }
 }

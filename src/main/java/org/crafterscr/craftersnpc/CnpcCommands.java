@@ -6,8 +6,6 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -21,8 +19,10 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 public final class CnpcCommands {
     private static final SimpleCommandExceptionType MUST_LOOK_CNPC = new SimpleCommandExceptionType(Component.literal("Debes mirar un CNPC a menos de 8 bloques."));
@@ -45,22 +45,35 @@ public final class CnpcCommands {
             .then(Commands.literal("npc")
                 .then(Commands.literal("skin")
                     .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
                         .then(Commands.argument("skin", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestSkins(builder))
                             .executes(ctx -> setSkinById(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "skin"))))))
                 .then(Commands.literal("route")
                     .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
-                            .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId")))))))
+                            .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId"))))))
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .executes(ctx -> removeNpc(ctx, StringArgumentType.getString(ctx, "npcId")))))
+                .then(Commands.literal("list")
+                    .executes(CnpcCommands::listNpcs)))
             .then(Commands.literal("route")
                 .then(Commands.literal("edit")
                     .then(Commands.argument("routeId", StringArgumentType.word())
+                        .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                         .executes(ctx -> editRoute(ctx, StringArgumentType.getString(ctx, "routeId")))))
                 .then(Commands.literal("save")
                     .executes(CnpcCommands::saveRoute))
                 .then(Commands.literal("cancel")
                     .executes(CnpcCommands::cancelRoute))
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("routeId", StringArgumentType.word())
+                        .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
+                        .executes(ctx -> removeRoute(ctx, StringArgumentType.getString(ctx, "routeId")))))
                 .then(Commands.literal("list")
                     .executes(CnpcCommands::listRoutes)))
             .then(Commands.literal("wand")
@@ -104,8 +117,9 @@ public final class CnpcCommands {
     private static int editRoute(CommandContext<CommandSourceStack> context, String routeId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         RouteStorage storage = RouteStorage.get(player.serverLevel());
-        RouteWandManager.startSession(player, routeId.toLowerCase(Locale.ROOT), storage.getRoute(routeId.toLowerCase(Locale.ROOT)));
-        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta " + routeId + " iniciada. Click derecho con la wand para agregar puntos, shift+click para borrar último."), false);
+        String normalizedRouteId = routeId.toLowerCase(Locale.ROOT);
+        RouteWandManager.startSession(player, normalizedRouteId, storage.getRoute(normalizedRouteId));
+        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta " + normalizedRouteId + " iniciada. Scroll para cambiar espera por punto, click derecho para agregar, shift+click para borrar último."), false);
         return 1;
     }
 
@@ -138,11 +152,37 @@ public final class CnpcCommands {
         return 1;
     }
 
+    private static int removeRoute(CommandContext<CommandSourceStack> context, String routeId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String normalizedRouteId = routeId.toLowerCase(Locale.ROOT);
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        if (!storage.removeRoute(normalizedRouteId)) {
+            context.getSource().sendFailure(Component.literal("No existe ruta: " + normalizedRouteId));
+            return 0;
+        }
+
+        int affectedNpcs = 0;
+        for (ServerLevel serverLevel : player.getServer().getAllLevels()) {
+            for (Entity entity : serverLevel.getAllEntities()) {
+                if (entity instanceof CnpcEntity npc && npc.getAssignedRouteId().equalsIgnoreCase(normalizedRouteId)) {
+                    npc.setAssignedRouteId("");
+                    npc.setRouteEnabled(false);
+                    affectedNpcs++;
+                }
+            }
+        }
+
+        int finalAffectedNpcs = affectedNpcs;
+        context.getSource().sendSuccess(() -> Component.literal("Ruta " + normalizedRouteId + " eliminada. NPCs afectados: " + finalAffectedNpcs), true);
+        return 1;
+    }
+
     private static int assignRoute(CommandContext<CommandSourceStack> context, String npcId, String routeId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
+        String normalizedRouteId = routeId.toLowerCase(Locale.ROOT);
         RouteStorage storage = RouteStorage.get(player.serverLevel());
-        if (!storage.hasRoute(routeId)) {
-            context.getSource().sendFailure(Component.literal("No existe ruta: " + routeId));
+        if (!storage.hasRoute(normalizedRouteId)) {
+            context.getSource().sendFailure(Component.literal("No existe ruta: " + normalizedRouteId));
             return 0;
         }
         Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
@@ -150,9 +190,29 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        npc.get().setAssignedRouteId(routeId);
+        npc.get().setAssignedRouteId(normalizedRouteId);
         npc.get().setRouteEnabled(true);
-        context.getSource().sendSuccess(() -> Component.literal("Ruta " + routeId + " asignada a NPC " + npcId), true);
+        context.getSource().sendSuccess(() -> Component.literal("Ruta " + normalizedRouteId + " asignada a NPC " + npcId), true);
+        return 1;
+    }
+
+    private static int removeNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().discard();
+        context.getSource().sendSuccess(() -> Component.literal("NPC eliminado: " + npcId), true);
+        return 1;
+    }
+
+    private static int listNpcs(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        List<String> npcIds = getNpcIds(player.serverLevel());
+        String ids = npcIds.isEmpty() ? "(sin NPCs)" : String.join(", ", npcIds);
+        context.getSource().sendSuccess(() -> Component.literal("NPCs: " + ids), false);
         return 1;
     }
 
@@ -188,6 +248,15 @@ public final class CnpcCommands {
         }
     }
 
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestNpcIds(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            return SharedSuggestionProvider.suggest(getNpcIds(player.serverLevel()), builder);
+        } catch (CommandSyntaxException e) {
+            return CompletableFuture.completedFuture(builder.build());
+        }
+    }
+
     private static CnpcEntity requireLookedNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
 
@@ -210,6 +279,18 @@ public final class CnpcCommands {
             }
         }
         return Optional.empty();
+    }
+
+    private static List<String> getNpcIds(ServerLevel level) {
+        return level.getServer().getAllLevels()
+            .stream()
+            .flatMap(serverLevel -> serverLevel.getAllEntities().stream())
+            .filter(CnpcEntity.class::isInstance)
+            .map(CnpcEntity.class::cast)
+            .map(CnpcEntity::getNpcId)
+            .filter(id -> !id.isBlank())
+            .sorted()
+            .toList();
     }
 
     private static Optional<EntityHitResult> raycastEntity(ServerPlayer player, double maxDistance) {

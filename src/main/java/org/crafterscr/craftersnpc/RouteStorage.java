@@ -11,6 +11,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -23,12 +24,12 @@ public class RouteStorage extends SavedData {
     }
 
     public void saveRoute(String routeId, List<RoutePoint> points) {
-        routes.put(routeId, List.copyOf(points));
+        routes.put(routeId.toLowerCase(Locale.ROOT), List.copyOf(points));
         setDirty();
     }
 
     public List<RoutePoint> getRoute(String routeId) {
-        return routes.getOrDefault(routeId, List.of());
+        return routes.getOrDefault(routeId.toLowerCase(Locale.ROOT), List.of());
     }
 
     public Set<String> routeIds() {
@@ -36,7 +37,16 @@ public class RouteStorage extends SavedData {
     }
 
     public boolean hasRoute(String routeId) {
-        return routes.containsKey(routeId);
+        return routes.containsKey(routeId.toLowerCase(Locale.ROOT));
+    }
+
+    public boolean removeRoute(String routeId) {
+        String normalized = routeId.toLowerCase(Locale.ROOT);
+        if (routes.remove(normalized) != null) {
+            setDirty();
+            return true;
+        }
+        return false;
     }
 
     public static RouteStorage load(CompoundTag tag, HolderLookup.Provider registries) {
@@ -49,7 +59,7 @@ public class RouteStorage extends SavedData {
                 CompoundTag point = (CompoundTag) pointTag;
                 routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), Mth.clamp(point.getInt("Wait"), 0, 3600 * 20)));
             }
-            storage.routes.put(key, routePoints);
+            storage.routes.put(key.toLowerCase(Locale.ROOT), routePoints);
         }
         return storage;
     }
