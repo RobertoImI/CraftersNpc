@@ -98,9 +98,10 @@ public class CnpcEntity extends PathfinderMob {
                 Vec3 nextCenter = nextPoint.pos();
                 getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
             }
-        } else if (getNavigation().isDone()) {
-            getNavigation().moveTo(center.x, center.y, center.z, 1.0D);
+            return;
         }
+
+        getNavigation().moveTo(center.x, center.y, center.z, 1.0D);
     }
 
     private List<RoutePoint> currentRoute() {

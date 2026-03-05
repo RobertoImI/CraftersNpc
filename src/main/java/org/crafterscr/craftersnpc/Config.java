@@ -35,7 +35,11 @@ public class Config {
     public static Set<Item> items;
 
     private static boolean validateItemName(final Object obj) {
-        return obj instanceof String itemName && BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(itemName));
+        if (!(obj instanceof String itemName)) {
+            return false;
+        }
+        ResourceLocation itemId = ResourceLocation.tryParse(itemName);
+        return itemId != null && BuiltInRegistries.ITEM.containsKey(itemId);
     }
 
     @SubscribeEvent
@@ -45,6 +49,10 @@ public class Config {
         magicNumberIntroduction = MAGIC_NUMBER_INTRODUCTION.get();
 
         // convert the list of strings into a set of items
-        items = ITEM_STRINGS.get().stream().map(itemName -> BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemName))).collect(Collectors.toSet());
+        items = ITEM_STRINGS.get().stream()
+            .map(ResourceLocation::tryParse)
+            .filter(itemId -> itemId != null && BuiltInRegistries.ITEM.containsKey(itemId))
+            .map(BuiltInRegistries.ITEM::get)
+            .collect(Collectors.toSet());
     }
 }
