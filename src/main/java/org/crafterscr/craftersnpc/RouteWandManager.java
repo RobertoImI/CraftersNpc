@@ -139,7 +139,7 @@ public final class RouteWandManager {
     private static void handleSlotScroll(ServerPlayer player, BuildSession session, int currentSlot) {
         int previousSlot = session.lastSelectedSlot();
         session.setLastSelectedSlot(currentSlot);
-        if (!player.hasPermissions(2)) {
+        if (!player.hasPermissions(2) || !player.isShiftKeyDown()) {
             return;
         }
 
@@ -154,7 +154,7 @@ public final class RouteWandManager {
         }
 
         player.getInventory().selected = previousSlot;
-        session.adjustSelectedWaitSeconds(direction);
+        session.adjustSelectedWaitSeconds(-direction);
         player.displayClientMessage(Component.literal("Espera por punto: " + session.getSelectedWaitSeconds() + "s"), true);
     }
 
