@@ -3,6 +3,7 @@ package org.crafterscr.craftersnpc;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -36,6 +37,8 @@ public class CnpcEntity extends PathfinderMob {
     private boolean routeEnabled;
     private int repathTicks;
     private int stuckTicks;
+    private List<RoutePoint> cachedRoute = List.of();
+    private List<RouteStorage.RoutePoint> cachedStoredRouteSource = List.of();
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -95,7 +98,7 @@ public class CnpcEntity extends PathfinderMob {
             stuckTicks = 0;
 
             if (waitTicks == 0) {
-                advanceIndex(points.size());
+                advanceIndex(points);
                 RoutePoint nextPoint = points.get(routeIndex);
                 Vec3 nextCenter = nextPoint.pos();
                 getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
@@ -112,7 +115,7 @@ public class CnpcEntity extends PathfinderMob {
             repathTicks = 0;
             stuckTicks = 0;
             if (waitTicks <= 0) {
-                advanceIndex(points.size());
+                advanceIndex(points);
                 RoutePoint nextPoint = points.get(routeIndex);
                 Vec3 nextCenter = nextPoint.pos();
                 getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
@@ -128,7 +131,7 @@ public class CnpcEntity extends PathfinderMob {
                 stuckTicks += 10;
                 if (stuckTicks >= 40) {
                     stuckTicks = 0;
-                    advanceIndex(points.size());
+                    advanceIndex(points);
                 }
             } else {
                 stuckTicks = 0;
@@ -140,11 +143,17 @@ public class CnpcEntity extends PathfinderMob {
         if (level() instanceof ServerLevel serverLevel && !getAssignedRouteId().isBlank()) {
             List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(getAssignedRouteId());
             if (!stored.isEmpty()) {
-                return stored.stream()
-                    .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks())))
-                    .toList();
+                if (stored != cachedStoredRouteSource) {
+                    cachedStoredRouteSource = stored;
+                    cachedRoute = stored.stream()
+                        .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks())))
+                        .toList();
+                }
+                return cachedRoute;
             }
         }
+        cachedStoredRouteSource = List.of();
+        cachedRoute = List.of();
         return route;
     }
 
@@ -152,8 +161,14 @@ public class CnpcEntity extends PathfinderMob {
         return Mth.clamp(rawWait, 0, 3600 * 20);
     }
 
-    private void advanceIndex(int size) {
+    private void advanceIndex(List<RoutePoint> points) {
+        int size = points.size();
         if (size <= 1) {
+            return;
+        }
+
+        if (isLoopRoute(points)) {
+            routeIndex = (routeIndex + 1) % size;
             return;
         }
 
@@ -174,12 +189,24 @@ public class CnpcEntity extends PathfinderMob {
         }
     }
 
+    private static boolean isLoopRoute(List<RoutePoint> points) {
+        if (points.size() < 3) {
+            return false;
+        }
+
+        BlockPos first = BlockPos.containing(points.get(0).pos());
+        BlockPos last = BlockPos.containing(points.get(points.size() - 1).pos());
+        return first.distManhattan(last) <= 1;
+    }
+
     public void addRoutePoint(Vec3 pos, int waitSeconds) {
         route.add(new RoutePoint(pos, Mth.clamp(waitSeconds, 0, 3600) * 20));
     }
 
     public void clearRoute() {
         route.clear();
+        cachedRoute = List.of();
+        cachedStoredRouteSource = List.of();
         routeIndex = 0;
         movingForward = true;
         waitTicks = 0;
@@ -216,6 +243,8 @@ public class CnpcEntity extends PathfinderMob {
 
     public void setAssignedRouteId(String routeId) {
         entityData.set(ROUTE_ID, routeId.toLowerCase(Locale.ROOT));
+        cachedRoute = List.of();
+        cachedStoredRouteSource = List.of();
         routeIndex = 0;
         movingForward = true;
         waitTicks = 0;
