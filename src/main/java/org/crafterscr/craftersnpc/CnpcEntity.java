@@ -21,6 +21,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -147,11 +148,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private static int normalizeWaitTicks(int rawWait) {
-        int clamped = Mth.clamp(rawWait, 0, 3600 * 20);
-        if (clamped > 0 && clamped <= 3600) {
-            return clamped * 20;
-        }
-        return clamped;
+        return Mth.clamp(rawWait, 0, 3600 * 20);
     }
 
     private void advanceIndex(int size) {
@@ -205,11 +202,11 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setSkinId(String skinId) {
-        entityData.set(SKIN_ID, skinId.toLowerCase());
+        entityData.set(SKIN_ID, skinId.toLowerCase(Locale.ROOT));
     }
 
     public void setNpcId(String npcId) {
-        entityData.set(NPC_ID, npcId.toLowerCase());
+        entityData.set(NPC_ID, npcId.toLowerCase(Locale.ROOT));
     }
 
     public String getNpcId() {
@@ -217,7 +214,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setAssignedRouteId(String routeId) {
-        entityData.set(ROUTE_ID, routeId.toLowerCase());
+        entityData.set(ROUTE_ID, routeId.toLowerCase(Locale.ROOT));
         routeIndex = 0;
         movingForward = true;
         waitTicks = 0;
