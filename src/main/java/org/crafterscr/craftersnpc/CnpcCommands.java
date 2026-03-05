@@ -76,7 +76,9 @@ public final class CnpcCommands {
                         .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                         .executes(ctx -> removeRoute(ctx, StringArgumentType.getString(ctx, "routeId")))))
                 .then(Commands.literal("list")
-                    .executes(CnpcCommands::listRoutes)))
+                    .executes(CnpcCommands::listRoutes))
+                .then(Commands.literal("preview")
+                    .executes(CnpcCommands::toggleRoutesPreview)))
             .then(Commands.literal("wand")
                 .then(Commands.literal("set")
                     .executes(CnpcCommands::setWand))
@@ -150,6 +152,16 @@ public final class CnpcCommands {
         RouteStorage storage = RouteStorage.get(player.serverLevel());
         String ids = storage.routeIds().stream().sorted().reduce((a, b) -> a + ", " + b).orElse("(sin rutas)");
         context.getSource().sendSuccess(() -> Component.literal("Rutas: " + ids), false);
+        return 1;
+    }
+
+
+    private static int toggleRoutesPreview(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        boolean enabled = RouteWandManager.toggleAllRoutesPreview(player);
+        context.getSource().sendSuccess(() -> Component.literal(enabled
+            ? "Visualización de todas las rutas activada (solo visible con wand en mano)."
+            : "Visualización de todas las rutas desactivada."), false);
         return 1;
     }
 

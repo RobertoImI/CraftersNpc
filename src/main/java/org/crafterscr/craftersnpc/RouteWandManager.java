@@ -18,11 +18,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public final class RouteWandManager {
     private static final String WAND_KEY = "cnpc_wand_item";
     private static final Map<UUID, BuildSession> BUILD_SESSIONS = new HashMap<>();
+    private static final Set<UUID> ROUTES_PREVIEW_ENABLED = new java.util.HashSet<>();
 
     private RouteWandManager() {
     }
@@ -37,6 +39,20 @@ public final class RouteWandManager {
 
     public static void clearSession(ServerPlayer player) {
         BUILD_SESSIONS.remove(player.getUUID());
+    }
+
+    public static boolean toggleAllRoutesPreview(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        if (ROUTES_PREVIEW_ENABLED.contains(uuid)) {
+            ROUTES_PREVIEW_ENABLED.remove(uuid);
+            return false;
+        }
+        ROUTES_PREVIEW_ENABLED.add(uuid);
+        return true;
+    }
+
+    public static boolean isAllRoutesPreviewEnabled(ServerPlayer player) {
+        return ROUTES_PREVIEW_ENABLED.contains(player.getUUID());
     }
 
     public static boolean hasWandInHand(ServerPlayer player) {
@@ -99,6 +115,10 @@ public final class RouteWandManager {
             return;
         }
 
+        if (player.tickCount % 10 == 0 && player.hasPermissions(2) && hasWandInHand(player)) {
+            renderAllSavedRoutes(player);
+        }
+
         BuildSession session = BUILD_SESSIONS.get(player.getUUID());
         if (session == null) {
             return;
@@ -118,6 +138,22 @@ public final class RouteWandManager {
             if (i > 0) {
                 RouteStorage.RoutePoint prev = session.points().get(i - 1);
                 drawSegment(player, prev, current);
+            }
+        }
+    }
+
+    private static void renderAllSavedRoutes(ServerPlayer player) {
+        if (!isAllRoutesPreviewEnabled(player)) {
+            return;
+        }
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        for (List<RouteStorage.RoutePoint> routePoints : storage.allRoutes().values()) {
+            for (int i = 0; i < routePoints.size(); i++) {
+                RouteStorage.RoutePoint current = routePoints.get(i);
+                sendParticle(player, current.x(), current.y(), current.z());
+                if (i > 0) {
+                    drawSegment(player, routePoints.get(i - 1), current);
+                }
             }
         }
     }
