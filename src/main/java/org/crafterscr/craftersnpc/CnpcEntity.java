@@ -92,6 +92,13 @@ public class CnpcEntity extends PathfinderMob {
             getNavigation().stop();
             repathTicks = 0;
             stuckTicks = 0;
+
+            if (waitTicks == 0) {
+                advanceIndex(points.size());
+                RoutePoint nextPoint = points.get(routeIndex);
+                Vec3 nextCenter = nextPoint.pos();
+                getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
+            }
             return;
         }
 
@@ -102,8 +109,8 @@ public class CnpcEntity extends PathfinderMob {
             waitTicks = point.waitTicks();
             repathTicks = 0;
             stuckTicks = 0;
-            advanceIndex(points.size());
             if (waitTicks <= 0) {
+                advanceIndex(points.size());
                 RoutePoint nextPoint = points.get(routeIndex);
                 Vec3 nextCenter = nextPoint.pos();
                 getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
