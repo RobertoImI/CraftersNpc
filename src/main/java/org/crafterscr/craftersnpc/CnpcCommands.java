@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 import java.util.concurrent.CompletableFuture;
 
 public final class CnpcCommands {
@@ -282,8 +283,7 @@ public final class CnpcCommands {
     }
 
     private static List<String> getNpcIds(ServerLevel level) {
-        return level.getServer().getAllLevels()
-            .stream()
+        return StreamSupport.stream(level.getServer().getAllLevels().spliterator(), false)
             .flatMap(serverLevel -> serverLevel.getAllEntities().stream())
             .filter(CnpcEntity.class::isInstance)
             .map(CnpcEntity.class::cast)

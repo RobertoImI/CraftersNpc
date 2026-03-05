@@ -10,7 +10,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
@@ -29,7 +28,7 @@ public final class RouteWandManager {
     }
 
     public static void startSession(ServerPlayer player, String routeId, List<RouteStorage.RoutePoint> existing) {
-        BUILD_SESSIONS.put(player.getUUID(), new BuildSession(routeId, new ArrayList<>(existing)));
+        BUILD_SESSIONS.put(player.getUUID(), new BuildSession(routeId, new ArrayList<>(existing), player.getInventory().selected));
     }
 
     public static Optional<BuildSession> session(ServerPlayer player) {
@@ -94,32 +93,6 @@ public final class RouteWandManager {
         player.sendSystemMessage(Component.literal("Punto agregado a ruta " + session.routeId() + " (#" + session.points().size() + ") espera " + session.getSelectedWaitSeconds() + "s"));
     }
 
-    public static void onItemScroll(PlayerEvent.ItemHeldEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !player.hasPermissions(2)) {
-            return;
-        }
-
-        BuildSession session = BUILD_SESSIONS.get(player.getUUID());
-        if (session == null) {
-            return;
-        }
-
-        ItemStack previousStack = player.getInventory().getItem(event.getPreviousSlot());
-        if (!isWandStack(player, previousStack)) {
-            return;
-        }
-
-        int direction = scrollDirection(event.getPreviousSlot(), event.getNewSlot());
-        if (direction == 0) {
-            return;
-        }
-
-        event.setCanceled(true);
-        player.getInventory().selected = event.getPreviousSlot();
-        session.adjustSelectedWaitSeconds(direction);
-        player.displayClientMessage(Component.literal("Espera por punto: " + session.getSelectedWaitSeconds() + "s"), true);
-    }
-
     private static int scrollDirection(int previousSlot, int newSlot) {
         int forward = Math.floorMod(newSlot - previousSlot, 9);
         int backward = Math.floorMod(previousSlot - newSlot, 9);
@@ -140,6 +113,11 @@ public final class RouteWandManager {
             return;
         }
 
+        int currentSlot = player.getInventory().selected;
+        if (session.lastSelectedSlot() != currentSlot) {
+            handleSlotScroll(player, session, currentSlot);
+        }
+
         if (player.tickCount % 10 == 0 && player.hasPermissions(2) && hasWandInHand(player)) {
             player.displayClientMessage(Component.literal("Editando ruta " + session.routeId() + " | espera: " + session.getSelectedWaitSeconds() + "s | puntos: " + session.points().size()), true);
         }
@@ -156,6 +134,28 @@ public final class RouteWandManager {
                 drawSegment(player, prev, current);
             }
         }
+    }
+
+    private static void handleSlotScroll(ServerPlayer player, BuildSession session, int currentSlot) {
+        int previousSlot = session.lastSelectedSlot();
+        session.setLastSelectedSlot(currentSlot);
+        if (!player.hasPermissions(2)) {
+            return;
+        }
+
+        ItemStack previousStack = player.getInventory().getItem(previousSlot);
+        if (!isWandStack(player, previousStack)) {
+            return;
+        }
+
+        int direction = scrollDirection(previousSlot, currentSlot);
+        if (direction == 0) {
+            return;
+        }
+
+        player.getInventory().selected = previousSlot;
+        session.adjustSelectedWaitSeconds(direction);
+        player.displayClientMessage(Component.literal("Espera por punto: " + session.getSelectedWaitSeconds() + "s"), true);
     }
 
     private static void drawSegment(ServerPlayer player, RouteStorage.RoutePoint a, RouteStorage.RoutePoint b) {
@@ -178,11 +178,13 @@ public final class RouteWandManager {
         private final String routeId;
         private final List<RouteStorage.RoutePoint> points;
         private int selectedWaitSeconds;
+        private int lastSelectedSlot;
 
-        public BuildSession(String routeId, List<RouteStorage.RoutePoint> points) {
+        public BuildSession(String routeId, List<RouteStorage.RoutePoint> points, int lastSelectedSlot) {
             this.routeId = routeId;
             this.points = points;
             this.selectedWaitSeconds = 0;
+            this.lastSelectedSlot = lastSelectedSlot;
         }
 
         public String routeId() {
@@ -195,6 +197,14 @@ public final class RouteWandManager {
 
         public int getSelectedWaitSeconds() {
             return selectedWaitSeconds;
+        }
+
+        public int lastSelectedSlot() {
+            return lastSelectedSlot;
+        }
+
+        public void setLastSelectedSlot(int lastSelectedSlot) {
+            this.lastSelectedSlot = lastSelectedSlot;
         }
 
         public void adjustSelectedWaitSeconds(int delta) {

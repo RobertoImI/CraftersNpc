@@ -24,7 +24,6 @@ public class CraftersNpc {
         }
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(RouteWandManager::onRightClickBlock);
-        NeoForge.EVENT_BUS.addListener(RouteWandManager::onItemScroll);
         NeoForge.EVENT_BUS.addListener(RouteWandManager::onPlayerTick);
     }
 
