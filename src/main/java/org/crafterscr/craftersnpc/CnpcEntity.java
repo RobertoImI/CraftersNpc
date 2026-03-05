@@ -33,6 +33,8 @@ public class CnpcEntity extends PathfinderMob {
     private boolean movingForward = true;
     private int waitTicks;
     private boolean routeEnabled;
+    private int repathTicks;
+    private int stuckTicks;
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -71,11 +73,15 @@ public class CnpcEntity extends PathfinderMob {
 
     private void tickRoute() {
         if (!routeEnabled) {
+            repathTicks = 0;
+            stuckTicks = 0;
             return;
         }
 
         List<RoutePoint> points = currentRoute();
         if (points.isEmpty()) {
+            repathTicks = 0;
+            stuckTicks = 0;
             return;
         }
 
@@ -84,6 +90,8 @@ public class CnpcEntity extends PathfinderMob {
         if (waitTicks > 0) {
             waitTicks--;
             getNavigation().stop();
+            repathTicks = 0;
+            stuckTicks = 0;
             return;
         }
 
@@ -92,6 +100,8 @@ public class CnpcEntity extends PathfinderMob {
         if (distanceToSqr(center) <= 1.2D) {
             getNavigation().stop();
             waitTicks = point.waitTicks();
+            repathTicks = 0;
+            stuckTicks = 0;
             advanceIndex(points.size());
             if (waitTicks <= 0) {
                 RoutePoint nextPoint = points.get(routeIndex);
@@ -101,7 +111,20 @@ public class CnpcEntity extends PathfinderMob {
             return;
         }
 
-        getNavigation().moveTo(center.x, center.y, center.z, 1.0D);
+        repathTicks++;
+        if (repathTicks >= 10 || getNavigation().isDone()) {
+            repathTicks = 0;
+            boolean hasPath = getNavigation().moveTo(center.x, center.y, center.z, 1.0D);
+            if (!hasPath) {
+                stuckTicks += 10;
+                if (stuckTicks >= 40) {
+                    stuckTicks = 0;
+                    advanceIndex(points.size());
+                }
+            } else {
+                stuckTicks = 0;
+            }
+        }
     }
 
     private List<RoutePoint> currentRoute() {
@@ -148,11 +171,18 @@ public class CnpcEntity extends PathfinderMob {
         movingForward = true;
         waitTicks = 0;
         routeEnabled = false;
+        repathTicks = 0;
+        stuckTicks = 0;
         getNavigation().stop();
     }
 
     public void setRouteEnabled(boolean routeEnabled) {
         this.routeEnabled = routeEnabled;
+        if (!routeEnabled) {
+            repathTicks = 0;
+            stuckTicks = 0;
+            getNavigation().stop();
+        }
     }
 
     public String getSkinId() {
@@ -176,6 +206,8 @@ public class CnpcEntity extends PathfinderMob {
         routeIndex = 0;
         movingForward = true;
         waitTicks = 0;
+        repathTicks = 0;
+        stuckTicks = 0;
     }
 
     public String getAssignedRouteId() {
@@ -201,6 +233,8 @@ public class CnpcEntity extends PathfinderMob {
         tag.putInt("RouteIndex", routeIndex);
         tag.putBoolean("MovingForward", movingForward);
         tag.putInt("WaitTicks", waitTicks);
+        tag.putInt("RepathTicks", repathTicks);
+        tag.putInt("StuckTicks", stuckTicks);
 
         ListTag points = new ListTag();
         for (RoutePoint point : route) {
@@ -225,6 +259,8 @@ public class CnpcEntity extends PathfinderMob {
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
         waitTicks = tag.getInt("WaitTicks");
+        repathTicks = tag.getInt("RepathTicks");
+        stuckTicks = tag.getInt("StuckTicks");
 
         route.clear();
         ListTag points = tag.getList("Route", Tag.TAG_COMPOUND);
