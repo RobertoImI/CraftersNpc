@@ -284,7 +284,7 @@ public final class CnpcCommands {
 
     private static List<String> getNpcIds(ServerLevel level) {
         return StreamSupport.stream(level.getServer().getAllLevels().spliterator(), false)
-            .flatMap(serverLevel -> serverLevel.getAllEntities().stream())
+            .flatMap(serverLevel -> StreamSupport.stream(serverLevel.getAllEntities().spliterator(), false))
             .filter(CnpcEntity.class::isInstance)
             .map(CnpcEntity.class::cast)
             .map(CnpcEntity::getNpcId)
