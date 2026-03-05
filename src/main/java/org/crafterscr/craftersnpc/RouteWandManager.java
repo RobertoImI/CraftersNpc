@@ -79,7 +79,7 @@ public final class RouteWandManager {
 
         event.setCanceled(true);
         BlockPos clicked = event.getPos();
-        Vec3 point = Vec3.atCenterOf(clicked.above());
+        Vec3 point = Vec3.atBottomCenterOf(clicked.above());
         if (player.isShiftKeyDown()) {
             if (!session.points().isEmpty()) {
                 session.points().remove(session.points().size() - 1);

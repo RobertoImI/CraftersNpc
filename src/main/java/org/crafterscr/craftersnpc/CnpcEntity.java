@@ -105,7 +105,8 @@ public class CnpcEntity extends PathfinderMob {
 
         RoutePoint point = points.get(routeIndex);
         Vec3 center = point.pos();
-        if (distanceToSqr(center) <= 1.2D) {
+        boolean reachedPoint = distanceToSqr(center) <= 1.8D || (getNavigation().isDone() && distanceToSqr(center) <= 4.0D);
+        if (reachedPoint) {
             getNavigation().stop();
             waitTicks = point.waitTicks();
             repathTicks = 0;

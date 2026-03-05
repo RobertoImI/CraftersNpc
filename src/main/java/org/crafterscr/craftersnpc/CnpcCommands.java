@@ -120,7 +120,7 @@ public final class CnpcCommands {
         RouteStorage storage = RouteStorage.get(player.serverLevel());
         String normalizedRouteId = routeId.toLowerCase(Locale.ROOT);
         RouteWandManager.startSession(player, normalizedRouteId, storage.getRoute(normalizedRouteId));
-        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta " + normalizedRouteId + " iniciada. Scroll para cambiar espera por punto, click derecho para agregar, shift+click para borrar último."), false);
+        context.getSource().sendSuccess(() -> Component.literal("Edición de ruta " + normalizedRouteId + " iniciada. Shift+Flecha Arriba/Abajo para cambiar espera por punto, click derecho para agregar, shift+click para borrar último."), false);
         return 1;
     }
 
