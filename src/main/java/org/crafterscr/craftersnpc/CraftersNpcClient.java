@@ -3,6 +3,7 @@ package org.crafterscr.craftersnpc;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 import java.io.IOException;
 
@@ -13,6 +14,8 @@ public final class CraftersNpcClient {
     public static void register(IEventBus modEventBus) {
         modEventBus.addListener(CraftersNpcClient::registerRenderers);
         modEventBus.addListener(CraftersNpcClient::onClientSetup);
+        RouteWandKeybinds.register(modEventBus);
+        NeoForge.EVENT_BUS.addListener(RouteWandKeybinds::onClientTick);
     }
 
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {

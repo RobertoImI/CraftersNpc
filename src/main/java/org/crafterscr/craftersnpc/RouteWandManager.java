@@ -28,7 +28,7 @@ public final class RouteWandManager {
     }
 
     public static void startSession(ServerPlayer player, String routeId, List<RouteStorage.RoutePoint> existing) {
-        BUILD_SESSIONS.put(player.getUUID(), new BuildSession(routeId, new ArrayList<>(existing), player.getInventory().selected));
+        BUILD_SESSIONS.put(player.getUUID(), new BuildSession(routeId, new ArrayList<>(existing)));
     }
 
     public static Optional<BuildSession> session(ServerPlayer player) {
@@ -93,15 +93,6 @@ public final class RouteWandManager {
         player.sendSystemMessage(Component.literal("Punto agregado a ruta " + session.routeId() + " (#" + session.points().size() + ") espera " + session.getSelectedWaitSeconds() + "s"));
     }
 
-    private static int scrollDirection(int previousSlot, int newSlot) {
-        int forward = Math.floorMod(newSlot - previousSlot, 9);
-        int backward = Math.floorMod(previousSlot - newSlot, 9);
-
-        if (forward == 0) {
-            return 0;
-        }
-        return forward <= backward ? 1 : -1;
-    }
 
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
@@ -111,11 +102,6 @@ public final class RouteWandManager {
         BuildSession session = BUILD_SESSIONS.get(player.getUUID());
         if (session == null) {
             return;
-        }
-
-        int currentSlot = player.getInventory().selected;
-        if (session.lastSelectedSlot() != currentSlot) {
-            handleSlotScroll(player, session, currentSlot);
         }
 
         if (player.tickCount % 10 == 0 && player.hasPermissions(2) && hasWandInHand(player)) {
@@ -136,27 +122,16 @@ public final class RouteWandManager {
         }
     }
 
-    private static void handleSlotScroll(ServerPlayer player, BuildSession session, int currentSlot) {
-        int previousSlot = session.lastSelectedSlot();
-        session.setLastSelectedSlot(currentSlot);
-        if (!player.hasPermissions(2) || !player.isShiftKeyDown()) {
+    public static void adjustWaitTime(ServerPlayer player, int delta) {
+        BuildSession session = BUILD_SESSIONS.get(player.getUUID());
+        if (session == null || !player.hasPermissions(2) || !player.isShiftKeyDown() || !hasWandInHand(player)) {
             return;
         }
 
-        ItemStack previousStack = player.getInventory().getItem(previousSlot);
-        if (!isWandStack(player, previousStack)) {
-            return;
-        }
-
-        int direction = scrollDirection(previousSlot, currentSlot);
-        if (direction == 0) {
-            return;
-        }
-
-        player.getInventory().selected = previousSlot;
-        session.adjustSelectedWaitSeconds(-direction);
+        session.adjustSelectedWaitSeconds(delta);
         player.displayClientMessage(Component.literal("Espera por punto: " + session.getSelectedWaitSeconds() + "s"), true);
     }
+
 
     private static void drawSegment(ServerPlayer player, RouteStorage.RoutePoint a, RouteStorage.RoutePoint b) {
         Vec3 start = new Vec3(a.x(), a.y(), a.z());
@@ -178,13 +153,11 @@ public final class RouteWandManager {
         private final String routeId;
         private final List<RouteStorage.RoutePoint> points;
         private int selectedWaitSeconds;
-        private int lastSelectedSlot;
 
-        public BuildSession(String routeId, List<RouteStorage.RoutePoint> points, int lastSelectedSlot) {
+        public BuildSession(String routeId, List<RouteStorage.RoutePoint> points) {
             this.routeId = routeId;
             this.points = points;
             this.selectedWaitSeconds = 0;
-            this.lastSelectedSlot = lastSelectedSlot;
         }
 
         public String routeId() {
@@ -197,14 +170,6 @@ public final class RouteWandManager {
 
         public int getSelectedWaitSeconds() {
             return selectedWaitSeconds;
-        }
-
-        public int lastSelectedSlot() {
-            return lastSelectedSlot;
-        }
-
-        public void setLastSelectedSlot(int lastSelectedSlot) {
-            this.lastSelectedSlot = lastSelectedSlot;
         }
 
         public void adjustSelectedWaitSeconds(int delta) {
