@@ -139,11 +139,19 @@ public class CnpcEntity extends PathfinderMob {
             List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(getAssignedRouteId());
             if (!stored.isEmpty()) {
                 return stored.stream()
-                    .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), p.waitTicks()))
+                    .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks())))
                     .toList();
             }
         }
         return route;
+    }
+
+    private static int normalizeWaitTicks(int rawWait) {
+        int clamped = Mth.clamp(rawWait, 0, 3600 * 20);
+        if (clamped > 0 && clamped <= 3600) {
+            return clamped * 20;
+        }
+        return clamped;
     }
 
     private void advanceIndex(int size) {
@@ -273,7 +281,7 @@ public class CnpcEntity extends PathfinderMob {
         ListTag points = tag.getList("Route", Tag.TAG_COMPOUND);
         for (Tag t : points) {
             CompoundTag p = (CompoundTag) t;
-            route.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), p.getInt("Wait")));
+            route.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), normalizeWaitTicks(p.getInt("Wait"))));
         }
         if (!route.isEmpty()) {
             routeIndex = Mth.clamp(routeIndex, 0, route.size() - 1);
