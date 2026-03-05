@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -22,8 +23,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.StreamSupport;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.StreamSupport;
 
 public final class CnpcCommands {
     private static final SimpleCommandExceptionType MUST_LOOK_CNPC = new SimpleCommandExceptionType(Component.literal("Debes mirar un CNPC a menos de 8 bloques."));
@@ -56,6 +57,41 @@ public final class CnpcCommands {
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                             .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId"))))))
+                .then(Commands.literal("nightmode")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .then(Commands.literal("on").executes(ctx -> setNightMode(ctx, StringArgumentType.getString(ctx, "npcId"), true)))
+                        .then(Commands.literal("off").executes(ctx -> setNightMode(ctx, StringArgumentType.getString(ctx, "npcId"), false)))))
+                .then(Commands.literal("nightrefuge")
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> addNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId"), 5))
+                            .then(Commands.argument("waitSeconds", IntegerArgumentType.integer(0, 3600))
+                                .executes(ctx -> addNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId"), IntegerArgumentType.getInteger(ctx, "waitSeconds"))))))
+                    .then(Commands.literal("clear")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> clearNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId")))))
+                    .then(Commands.literal("list")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> listNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId"))))))
+                .then(Commands.literal("poi")
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> addPoi(ctx, StringArgumentType.getString(ctx, "npcId"), 5))
+                            .then(Commands.argument("waitSeconds", IntegerArgumentType.integer(0, 3600))
+                                .executes(ctx -> addPoi(ctx, StringArgumentType.getString(ctx, "npcId"), IntegerArgumentType.getInteger(ctx, "waitSeconds"))))))
+                    .then(Commands.literal("clear")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> clearPoi(ctx, StringArgumentType.getString(ctx, "npcId")))))
+                    .then(Commands.literal("list")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(ctx -> listPoi(ctx, StringArgumentType.getString(ctx, "npcId"))))))
                 .then(Commands.literal("remove")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -155,7 +191,6 @@ public final class CnpcCommands {
         return 1;
     }
 
-
     private static int toggleRoutesPreview(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         boolean enabled = RouteWandManager.toggleAllRoutesPreview(player);
@@ -206,6 +241,90 @@ public final class CnpcCommands {
         npc.get().setAssignedRouteId(normalizedRouteId);
         npc.get().setRouteEnabled(true);
         context.getSource().sendSuccess(() -> Component.literal("Ruta " + normalizedRouteId + " asignada a NPC " + npcId), true);
+        return 1;
+    }
+
+    private static int setNightMode(CommandContext<CommandSourceStack> context, String npcId, boolean enabled) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setNightModeOnly(enabled);
+        context.getSource().sendSuccess(() -> Component.literal("NightMode de " + npcId + " = " + enabled), true);
+        return 1;
+    }
+
+    private static int addNightRefuge(CommandContext<CommandSourceStack> context, String npcId, int waitSeconds) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().addNightRefugePoint(player.position(), waitSeconds);
+        context.getSource().sendSuccess(() -> Component.literal("Refugio nocturno agregado a " + npcId + " en tu posición actual."), true);
+        return 1;
+    }
+
+    private static int clearNightRefuge(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().clearNightRefugePoints();
+        context.getSource().sendSuccess(() -> Component.literal("Refugios nocturnos removidos para " + npcId), true);
+        return 1;
+    }
+
+    private static int listNightRefuge(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<String> summary = npc.get().nightRefugeSummary();
+        context.getSource().sendSuccess(() -> Component.literal("Refugios nocturnos de " + npcId + ": " + (summary.isEmpty() ? "(sin refugios)" : String.join(" | ", summary))), false);
+        return 1;
+    }
+
+    private static int addPoi(CommandContext<CommandSourceStack> context, String npcId, int waitSeconds) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().addPoiPoint(player.position(), waitSeconds);
+        context.getSource().sendSuccess(() -> Component.literal("POI agregado a " + npcId + " en tu posición actual."), true);
+        return 1;
+    }
+
+    private static int clearPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().clearPoiPoints();
+        context.getSource().sendSuccess(() -> Component.literal("POIs removidos para " + npcId), true);
+        return 1;
+    }
+
+    private static int listPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<String> summary = npc.get().poiSummary();
+        context.getSource().sendSuccess(() -> Component.literal("POIs de " + npcId + ": " + (summary.isEmpty() ? "(sin POIs)" : String.join(" | ", summary))), false);
         return 1;
     }
 
