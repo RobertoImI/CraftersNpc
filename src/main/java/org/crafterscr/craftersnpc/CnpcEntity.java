@@ -176,7 +176,7 @@ public class CnpcEntity extends PathfinderMob {
         }
 
         Vec3 center = currentTargetPos(points);
-        boolean reachedPoint = distanceToSqr(center) <= 1.8D || (getNavigation().isDone() && distanceToSqr(center) <= 4.0D);
+        boolean reachedPoint = distanceToSqr(center) <= 1.8D || (getNavigation().isDone() && distanceToSqr(center) <= 2.25D);
         if (reachedPoint) {
             getNavigation().stop();
             waitTicks = currentWaitTicks(points);
@@ -247,6 +247,7 @@ public class CnpcEntity extends PathfinderMob {
             poiState = PoiState.NONE;
             poiIndex = -1;
             poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_STALL;
+            advanceIndex(baseRoute);
             return;
         }
 
