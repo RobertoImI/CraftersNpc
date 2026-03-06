@@ -548,12 +548,12 @@ public class CnpcEntity extends PathfinderMob {
         return first.distManhattan(last) <= 1;
     }
 
-    public void addRoutePoint(Vec3 pos, int waitSeconds) {
-        route.add(new RoutePoint(pos, Mth.clamp(waitSeconds, 0, 3600) * 20));
-    }
-
-    public void addPoiPoint(Vec3 pos, int waitSeconds) {
+    public boolean addPoiPoint(Vec3 pos, int waitSeconds) {
+        if (!poiPoints.isEmpty()) {
+            return false;
+        }
         poiPoints.add(new RoutePoint(pos, Mth.clamp(waitSeconds, 0, 3600) * 20));
+        return true;
     }
 
     public void clearPoiPoints() {
@@ -875,6 +875,12 @@ public class CnpcEntity extends PathfinderMob {
             CompoundTag p = (CompoundTag) t;
             poiPoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), normalizeWaitTicks(p.getInt("Wait"))));
         }
+        if (poiPoints.size() > 1) {
+            RoutePoint firstPoi = poiPoints.getFirst();
+            poiPoints.clear();
+            poiPoints.add(firstPoi);
+        }
+
         if (poiPoints.isEmpty() || poiIndex < 0 || poiIndex >= poiPoints.size()) {
             poiState = PoiState.NONE;
             poiIndex = -1;

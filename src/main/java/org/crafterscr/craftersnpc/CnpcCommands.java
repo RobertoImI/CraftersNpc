@@ -330,7 +330,10 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        npc.get().addPoiPoint(player.position(), waitSeconds);
+        if (!npc.get().addPoiPoint(player.position(), waitSeconds)) {
+            context.getSource().sendFailure(Component.literal("El NPC " + npcId + " ya tiene un POI asignado. Usa /cnpc npc poi clear " + npcId + " para reemplazarlo."));
+            return 0;
+        }
         context.getSource().sendSuccess(() -> Component.literal("POI agregado a " + npcId + " en tu posición actual."), true);
         return 1;
     }
