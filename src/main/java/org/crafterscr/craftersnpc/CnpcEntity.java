@@ -33,6 +33,10 @@ import java.util.List;
 import java.util.Locale;
 
 public class CnpcEntity extends PathfinderMob {
+    private static final int POI_CHECK_COOLDOWN_AFTER_STALL = 20 * 45;
+    private static final int POI_CHECK_COOLDOWN_AFTER_RETURN = 20 * 30;
+    private static final int POI_CHECK_COOLDOWN_AFTER_DETOUR_START = 20 * 90;
+
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -113,17 +117,23 @@ public class CnpcEntity extends PathfinderMob {
         tickDoorInteraction();
 
         if (!routeEnabled) {
-            repathTicks = 0;
-            stuckTicks = 0;
-            noProgressTicks = 0;
+            resetMovementTracking();
             return;
         }
 
         List<RoutePoint> points = currentRoute();
         if (points.isEmpty()) {
-            repathTicks = 0;
-            stuckTicks = 0;
-            noProgressTicks = 0;
+            resetMovementTracking();
+            waitTicks = 0;
+            resetPoiState();
+            resetNightState();
+            closeInteractingDoorIfAny();
+            getNavigation().stop();
+
+            if (!getAssignedRouteId().isBlank()) {
+                routeEnabled = false;
+                CraftersNpc.LOGGER.debug("Desactivando ruta vacía para NPC {} (RouteId={})", getNpcId(), getAssignedRouteId());
+            }
             return;
         }
 
@@ -145,9 +155,7 @@ public class CnpcEntity extends PathfinderMob {
         if (waitTicks > 0) {
             waitTicks--;
             getNavigation().stop();
-            repathTicks = 0;
-            stuckTicks = 0;
-            noProgressTicks = 0;
+            resetMovementTracking();
 
             if (waitTicks == 0) {
                 if (nightModeState == NightModeState.AT_REFUGE) {
@@ -172,9 +180,7 @@ public class CnpcEntity extends PathfinderMob {
         if (reachedPoint) {
             getNavigation().stop();
             waitTicks = currentWaitTicks(points);
-            repathTicks = 0;
-            stuckTicks = 0;
-            noProgressTicks = 0;
+            resetMovementTracking();
             lastProgressPos = position();
             if (waitTicks <= 0) {
                 advanceAfterReached(points);
@@ -223,8 +229,7 @@ public class CnpcEntity extends PathfinderMob {
 
     private void recoverFromStall(List<RoutePoint> baseRoute) {
         waitTicks = 0;
-        repathTicks = 0;
-        stuckTicks = 0;
+        resetMovementTracking();
 
         if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
             nightModeState = NightModeState.RETURNING_TO_ROUTE;
@@ -241,7 +246,7 @@ public class CnpcEntity extends PathfinderMob {
         if (poiState == PoiState.RETURNING) {
             poiState = PoiState.NONE;
             poiIndex = -1;
-            poiCheckCooldown = 20 * 45;
+            poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_STALL;
             return;
         }
 
@@ -336,8 +341,7 @@ public class CnpcEntity extends PathfinderMob {
     private void updateNightModeState(List<RoutePoint> baseRoute) {
         if (!nightModeOnly || nightRefugePoints.isEmpty()) {
             if (nightModeState == NightModeState.RETURNING_TO_ROUTE) {
-                nightModeState = NightModeState.NONE;
-                nightRefugeIndex = -1;
+                resetNightState();
             }
             return;
         }
@@ -353,8 +357,7 @@ public class CnpcEntity extends PathfinderMob {
             nightModeState = NightModeState.RETURNING_TO_ROUTE;
             nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, baseRoute.size() - 1);
             waitTicks = 0;
-            repathTicks = 0;
-            stuckTicks = 0;
+            resetMovementTracking();
         }
     }
 
@@ -375,38 +378,56 @@ public class CnpcEntity extends PathfinderMob {
         nightReturnRouteIndex = routeIndex;
         nightModeState = NightModeState.GOING_TO_REFUGE;
         waitTicks = 0;
-        repathTicks = 0;
-        stuckTicks = 0;
-        noProgressTicks = 0;
-        poiState = PoiState.NONE;
-        poiIndex = -1;
+        resetMovementTracking();
+        resetPoiState();
     }
 
     private Vec3 currentTargetPos(List<RoutePoint> baseRoute) {
-        if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+        if ((nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) && isValidNightTarget()) {
             return nightRefugePoints.get(nightRefugeIndex).pos();
+        }
+        if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+            CraftersNpc.LOGGER.debug("Night target inválido para NPC {} (state={}, index={})", getNpcId(), nightModeState, nightRefugeIndex);
+            resetNightState();
         }
         if (nightModeState == NightModeState.RETURNING_TO_ROUTE) {
             return baseRoute.get(nightReturnRouteIndex).pos();
         }
 
         return switch (poiState) {
-            case TO_POI, AT_POI -> poiPoints.get(poiIndex).pos();
+            case TO_POI, AT_POI -> {
+                if (isValidPoiTarget()) {
+                    yield poiPoints.get(poiIndex).pos();
+                }
+                CraftersNpc.LOGGER.debug("POI target inválido para NPC {} (state={}, index={})", getNpcId(), poiState, poiIndex);
+                resetPoiState();
+                yield baseRoute.get(routeIndex).pos();
+            }
             case RETURNING -> baseRoute.get(poiReturnRouteIndex).pos();
             case NONE -> baseRoute.get(routeIndex).pos();
         };
     }
 
     private int currentWaitTicks(List<RoutePoint> baseRoute) {
-        if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+        if ((nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) && isValidNightTarget()) {
             return nightRefugePoints.get(nightRefugeIndex).waitTicks();
+        }
+        if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+            resetNightState();
+            return baseRoute.get(routeIndex).waitTicks();
         }
         if (nightModeState == NightModeState.RETURNING_TO_ROUTE) {
             return 0;
         }
 
         return switch (poiState) {
-            case TO_POI, AT_POI -> poiPoints.get(poiIndex).waitTicks();
+            case TO_POI, AT_POI -> {
+                if (isValidPoiTarget()) {
+                    yield poiPoints.get(poiIndex).waitTicks();
+                }
+                resetPoiState();
+                yield baseRoute.get(routeIndex).waitTicks();
+            }
             case RETURNING -> 0;
             case NONE -> baseRoute.get(routeIndex).waitTicks();
         };
@@ -426,8 +447,7 @@ public class CnpcEntity extends PathfinderMob {
             return;
         }
         if (nightModeState == NightModeState.RETURNING_TO_ROUTE) {
-            nightModeState = NightModeState.NONE;
-            nightRefugeIndex = -1;
+            resetNightState();
             return;
         }
 
@@ -440,9 +460,8 @@ public class CnpcEntity extends PathfinderMob {
             return;
         }
         if (poiState == PoiState.RETURNING) {
-            poiState = PoiState.NONE;
-            poiIndex = -1;
-            poiCheckCooldown = 20 * 30;
+            resetPoiState();
+            poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_RETURN;
             return;
         }
 
@@ -465,10 +484,8 @@ public class CnpcEntity extends PathfinderMob {
         poiReturnRouteIndex = routeIndex;
         poiState = PoiState.TO_POI;
         waitTicks = 0;
-        repathTicks = 0;
-        stuckTicks = 0;
-        noProgressTicks = 0;
-        poiCheckCooldown = 20 * 90;
+        resetMovementTracking();
+        poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_DETOUR_START;
     }
 
     private List<RoutePoint> currentRoute() {
@@ -541,8 +558,11 @@ public class CnpcEntity extends PathfinderMob {
 
     public void clearPoiPoints() {
         poiPoints.clear();
-        poiState = PoiState.NONE;
-        poiIndex = -1;
+        resetPoiState();
+        waitTicks = 0;
+        resetMovementTracking();
+        lastProgressPos = position();
+        reengageRouteNavigation();
     }
 
     public List<String> poiSummary() {
@@ -560,8 +580,11 @@ public class CnpcEntity extends PathfinderMob {
 
     public void clearNightRefugePoints() {
         nightRefugePoints.clear();
-        nightModeState = NightModeState.NONE;
-        nightRefugeIndex = -1;
+        resetNightState();
+        waitTicks = 0;
+        resetMovementTracking();
+        lastProgressPos = position();
+        reengageRouteNavigation();
     }
 
     public List<String> nightRefugeSummary() {
@@ -581,24 +604,23 @@ public class CnpcEntity extends PathfinderMob {
         movingForward = true;
         waitTicks = 0;
         routeEnabled = false;
-        repathTicks = 0;
-        stuckTicks = 0;
-        noProgressTicks = 0;
-        poiState = PoiState.NONE;
-        poiIndex = -1;
-        nightModeState = NightModeState.NONE;
-        nightRefugeIndex = -1;
+        resetMovementTracking();
+        resetPoiState();
+        resetNightState();
+        closeInteractingDoorIfAny();
         getNavigation().stop();
     }
 
     public void setRouteEnabled(boolean routeEnabled) {
         this.routeEnabled = routeEnabled;
         if (!routeEnabled) {
-            repathTicks = 0;
-            stuckTicks = 0;
-            noProgressTicks = 0;
+            resetMovementTracking();
+            waitTicks = 0;
+            closeInteractingDoorIfAny();
             getNavigation().stop();
+            return;
         }
+        reengageRouteNavigation();
     }
 
     public String getSkinId() {
@@ -624,13 +646,11 @@ public class CnpcEntity extends PathfinderMob {
         routeIndex = 0;
         movingForward = true;
         waitTicks = 0;
-        repathTicks = 0;
-        stuckTicks = 0;
-        noProgressTicks = 0;
-        poiState = PoiState.NONE;
-        poiIndex = -1;
-        nightModeState = NightModeState.NONE;
-        nightRefugeIndex = -1;
+        resetMovementTracking();
+        resetPoiState();
+        resetNightState();
+        closeInteractingDoorIfAny();
+        reengageRouteNavigation();
     }
 
     public String getAssignedRouteId() {
@@ -652,10 +672,107 @@ public class CnpcEntity extends PathfinderMob {
     public void setNightModeOnly(boolean nightModeOnly) {
         this.nightModeOnly = nightModeOnly;
         if (!nightModeOnly) {
-            nightModeState = NightModeState.NONE;
-            nightRefugeIndex = -1;
-            getNavigation().stop();
+            resetNightState();
+            waitTicks = 0;
+            resetMovementTracking();
+            lastProgressPos = position();
+            reengageRouteNavigation();
         }
+    }
+
+    public void forceRecoverFromStall() {
+        if (!routeEnabled) {
+            return;
+        }
+        List<RoutePoint> points = currentRoute();
+        if (points.isEmpty()) {
+            return;
+        }
+        routeIndex = Mth.clamp(routeIndex, 0, points.size() - 1);
+        nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, points.size() - 1);
+        poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, points.size() - 1);
+        recoverFromStall(points);
+        lastProgressPos = position();
+        Vec3 nextCenter = currentTargetPos(points);
+        getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
+    }
+
+    public String debugRouteState() {
+        List<RoutePoint> points = currentRoute();
+        String target = points.isEmpty() ? "none" : formatVec3(currentTargetPos(points));
+        return "routeEnabled=" + routeEnabled
+            + ", routeId=" + getAssignedRouteId()
+            + ", routePoints=" + points.size()
+            + ", routeIndex=" + routeIndex
+            + ", movingForward=" + movingForward
+            + ", waitTicks=" + waitTicks
+            + ", repathTicks=" + repathTicks
+            + ", stuckTicks=" + stuckTicks
+            + ", noProgressTicks=" + noProgressTicks
+            + ", poiState=" + poiState
+            + ", poiIndex=" + poiIndex
+            + ", poiCount=" + poiPoints.size()
+            + ", poiReturnRouteIndex=" + poiReturnRouteIndex
+            + ", poiCheckCooldown=" + poiCheckCooldown
+            + ", nightModeOnly=" + nightModeOnly
+            + ", nightState=" + nightModeState
+            + ", nightRefugeIndex=" + nightRefugeIndex
+            + ", nightRefugeCount=" + nightRefugePoints.size()
+            + ", nightReturnRouteIndex=" + nightReturnRouteIndex
+            + ", pos=" + formatVec3(position())
+            + ", target=" + target;
+    }
+
+    private String formatVec3(Vec3 vec) {
+        return "(" + Mth.floor(vec.x) + "," + Mth.floor(vec.y) + "," + Mth.floor(vec.z) + ")";
+    }
+
+    private void resetMovementTracking() {
+        repathTicks = 0;
+        stuckTicks = 0;
+        noProgressTicks = 0;
+    }
+
+    private void resetPoiState() {
+        poiState = PoiState.NONE;
+        poiIndex = -1;
+    }
+
+    private void resetNightState() {
+        nightModeState = NightModeState.NONE;
+        nightRefugeIndex = -1;
+    }
+
+    private boolean isValidPoiTarget() {
+        return poiIndex >= 0 && poiIndex < poiPoints.size();
+    }
+
+    private boolean isValidNightTarget() {
+        return nightRefugeIndex >= 0 && nightRefugeIndex < nightRefugePoints.size();
+    }
+
+    private void reengageRouteNavigation() {
+        getNavigation().stop();
+        if (!routeEnabled) {
+            return;
+        }
+        List<RoutePoint> points = currentRoute();
+        if (points.isEmpty()) {
+            return;
+        }
+        routeIndex = Mth.clamp(routeIndex, 0, points.size() - 1);
+        nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, points.size() - 1);
+        poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, points.size() - 1);
+        Vec3 nextCenter = currentTargetPos(points);
+        getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
+    }
+
+    private void closeInteractingDoorIfAny() {
+        if (interactingDoorPos != null) {
+            setDoorOpen(interactingDoorPos, false);
+        }
+        interactingDoorPos = null;
+        doorCloseDelayTicks = 0;
     }
 
     @Override

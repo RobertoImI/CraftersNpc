@@ -57,6 +57,14 @@ public final class CnpcCommands {
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                             .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId"))))))
+                .then(Commands.literal("debug")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .executes(ctx -> debugNpc(ctx, StringArgumentType.getString(ctx, "npcId")))))
+                .then(Commands.literal("unstick")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .executes(ctx -> unstickNpc(ctx, StringArgumentType.getString(ctx, "npcId")))))
                 .then(Commands.literal("nightmode")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -253,6 +261,29 @@ public final class CnpcCommands {
         }
         npc.get().setNightModeOnly(enabled);
         context.getSource().sendSuccess(() -> Component.literal("NightMode de " + npcId + " = " + enabled), true);
+        return 1;
+    }
+
+    private static int debugNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Estado de " + npcId + ": " + npc.get().debugRouteState()), false);
+        return 1;
+    }
+
+    private static int unstickNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().forceRecoverFromStall();
+        context.getSource().sendSuccess(() -> Component.literal("Se forzó recuperación de ruta para " + npcId), true);
         return 1;
     }
 
