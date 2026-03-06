@@ -158,16 +158,9 @@ public class CnpcEntity extends PathfinderMob {
             resetMovementTracking();
 
             if (waitTicks == 0) {
-                if (nightModeState == NightModeState.AT_REFUGE) {
-                    if (nightModeOnly && level().isNight()) {
-                        waitTicks = 20;
-                        return;
-                    }
-                    nightModeState = NightModeState.RETURNING_TO_ROUTE;
-                } else if (poiState == PoiState.AT_POI) {
-                    poiState = PoiState.RETURNING;
-                } else if (nightModeState == NightModeState.NONE && poiState == PoiState.NONE) {
-                    advanceIndex(points);
+                advanceAfterReached(points);
+                if (waitTicks > 0) {
+                    return;
                 }
                 Vec3 nextCenter = currentTargetPos(points);
                 getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
