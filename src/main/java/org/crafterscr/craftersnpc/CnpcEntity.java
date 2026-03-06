@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -18,6 +19,10 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.InteractionHand;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -51,6 +56,8 @@ public class CnpcEntity extends PathfinderMob {
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
     private int nightReturnRouteIndex;
+    private BlockPos interactingDoorPos;
+    private int doorCloseDelayTicks;
 
     private List<RoutePoint> cachedRoute = List.of();
     private List<RouteStorage.RoutePoint> cachedStoredRouteSource = List.of();
@@ -91,6 +98,8 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private void tickRoute() {
+        tickDoorInteraction();
+
         if (!routeEnabled) {
             repathTicks = 0;
             stuckTicks = 0;
@@ -172,6 +181,91 @@ public class CnpcEntity extends PathfinderMob {
                 stuckTicks = 0;
             }
         }
+    }
+
+    private void tickDoorInteraction() {
+        if (interactingDoorPos != null) {
+            if (!isDoor(interactingDoorPos)) {
+                interactingDoorPos = null;
+                doorCloseDelayTicks = 0;
+            } else {
+                double distanceToDoor = distanceToSqr(Vec3.atCenterOf(interactingDoorPos));
+                if (distanceToDoor <= 6.25D) {
+                    doorCloseDelayTicks = 20;
+                } else if (doorCloseDelayTicks > 0) {
+                    doorCloseDelayTicks--;
+                } else {
+                    setDoorOpen(interactingDoorPos, false);
+                    interactingDoorPos = null;
+                }
+            }
+        }
+
+        BlockPos frontDoorPos = findDoorInFront();
+        if (frontDoorPos == null) {
+            return;
+        }
+
+        if (interactingDoorPos != null && !interactingDoorPos.equals(frontDoorPos)) {
+            setDoorOpen(interactingDoorPos, false);
+        }
+
+        interactingDoorPos = frontDoorPos;
+        setDoorOpen(interactingDoorPos, true);
+        doorCloseDelayTicks = 20;
+        swing(InteractionHand.MAIN_HAND);
+    }
+
+    private BlockPos findDoorInFront() {
+        Vec3 movement = getDeltaMovement();
+        Vec3 horizontalMovement = new Vec3(movement.x, 0.0D, movement.z);
+        Vec3 facing = horizontalMovement.lengthSqr() > 1.0E-4D ? horizontalMovement.normalize() : new Vec3(getLookAngle().x, 0.0D, getLookAngle().z).normalize();
+        if (facing.lengthSqr() <= 1.0E-4D) {
+            return null;
+        }
+
+        Direction direction = Direction.getNearest(facing.x, 0.0D, facing.z);
+        BlockPos origin = blockPosition();
+        BlockPos[] candidates = new BlockPos[] {
+            origin.relative(direction),
+            origin.above().relative(direction),
+            origin,
+            origin.above()
+        };
+
+        for (BlockPos candidate : candidates) {
+            BlockPos doorBase = getDoorBasePos(candidate);
+            if (doorBase != null) {
+                return doorBase;
+            }
+        }
+        return null;
+    }
+
+    private boolean isDoor(BlockPos pos) {
+        return getDoorBasePos(pos) != null;
+    }
+
+    private BlockPos getDoorBasePos(BlockPos pos) {
+        BlockState state = level().getBlockState(pos);
+        if (!(state.getBlock() instanceof DoorBlock)) {
+            return null;
+        }
+        if (state.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
+            return pos;
+        }
+        return pos.below();
+    }
+
+    private void setDoorOpen(BlockPos doorBasePos, boolean open) {
+        BlockState doorState = level().getBlockState(doorBasePos);
+        if (!(doorState.getBlock() instanceof DoorBlock doorBlock)) {
+            return;
+        }
+        if (doorState.getValue(DoorBlock.OPEN) == open) {
+            return;
+        }
+        doorBlock.setOpen(this, level(), doorState, doorBasePos, open);
     }
 
     private void updateNightModeState(List<RoutePoint> baseRoute) {
