@@ -5,6 +5,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 public final class RouteWandManager {
     private static final String WAND_KEY = "cnpc_wand_item";
+    private static final double PREVIEW_MAX_DISTANCE_SQR = 96.0D * 96.0D;
     private static final Map<UUID, BuildSession> BUILD_SESSIONS = new HashMap<>();
     private static final Set<UUID> ROUTES_PREVIEW_ENABLED = new java.util.HashSet<>();
 
@@ -39,6 +41,12 @@ public final class RouteWandManager {
 
     public static void clearSession(ServerPlayer player) {
         BUILD_SESSIONS.remove(player.getUUID());
+    }
+
+    public static void clearPlayerState(Player player) {
+        UUID uuid = player.getUUID();
+        BUILD_SESSIONS.remove(uuid);
+        ROUTES_PREVIEW_ENABLED.remove(uuid);
     }
 
     public static boolean toggleAllRoutesPreview(ServerPlayer player) {
@@ -134,6 +142,9 @@ public final class RouteWandManager {
 
         for (int i = 0; i < session.points().size(); i++) {
             RouteStorage.RoutePoint current = session.points().get(i);
+            if (!isWithinPreviewRange(player, current.x(), current.y(), current.z())) {
+                continue;
+            }
             sendParticle(player, current.x(), current.y(), current.z());
             if (i > 0) {
                 RouteStorage.RoutePoint prev = session.points().get(i - 1);
@@ -150,6 +161,9 @@ public final class RouteWandManager {
         for (List<RouteStorage.RoutePoint> routePoints : storage.allRoutes().values()) {
             for (int i = 0; i < routePoints.size(); i++) {
                 RouteStorage.RoutePoint current = routePoints.get(i);
+                if (!isWithinPreviewRange(player, current.x(), current.y(), current.z())) {
+                    continue;
+                }
                 sendParticle(player, current.x(), current.y(), current.z());
                 if (i > 0) {
                     drawSegment(player, routePoints.get(i - 1), current);
@@ -170,6 +184,9 @@ public final class RouteWandManager {
 
 
     private static void drawSegment(ServerPlayer player, RouteStorage.RoutePoint a, RouteStorage.RoutePoint b) {
+        if (!isWithinPreviewRange(player, a.x(), a.y(), a.z()) && !isWithinPreviewRange(player, b.x(), b.y(), b.z())) {
+            return;
+        }
         Vec3 start = new Vec3(a.x(), a.y(), a.z());
         Vec3 end = new Vec3(b.x(), b.y(), b.z());
         double distance = start.distanceTo(end);
@@ -183,6 +200,10 @@ public final class RouteWandManager {
 
     private static void sendParticle(ServerPlayer player, double x, double y, double z) {
         player.serverLevel().sendParticles(player, ParticleTypes.END_ROD, false, x, y, z, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+    }
+
+    private static boolean isWithinPreviewRange(ServerPlayer player, double x, double y, double z) {
+        return player.distanceToSqr(x, y, z) <= PREVIEW_MAX_DISTANCE_SQR;
     }
 
     public static final class BuildSession {

@@ -11,6 +11,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,7 +35,7 @@ public class RouteStorage extends SavedData {
     }
 
     public Set<String> routeIds() {
-        return routes.keySet();
+        return Collections.unmodifiableSet(new HashSet<>(routes.keySet()));
     }
 
     public Map<String, List<RoutePoint>> allRoutes() {

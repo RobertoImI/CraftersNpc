@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.StreamSupport;
 
 public final class CnpcCommands {
     private static final SimpleCommandExceptionType MUST_LOOK_CNPC = new SimpleCommandExceptionType(Component.literal("Debes mirar un CNPC a menos de 8 bloques."));
@@ -133,7 +132,7 @@ public final class CnpcCommands {
     private static int createNpc(CommandContext<CommandSourceStack> context, boolean slimModel) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String npcId = StringArgumentType.getString(context, "npcId").toLowerCase(Locale.ROOT);
-        if (findNpcById(player.serverLevel(), npcId).isPresent()) {
+        if (NpcRegistry.findById(player.getServer(), npcId).isPresent()) {
             context.getSource().sendFailure(Component.literal("Ya existe un NPC con ID: " + npcId));
             return 0;
         }
@@ -151,7 +150,7 @@ public final class CnpcCommands {
 
     private static int setSkinById(CommandContext<CommandSourceStack> context, String npcId, String skin) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -241,7 +240,7 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal("No existe ruta: " + normalizedRouteId));
             return 0;
         }
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -254,7 +253,7 @@ public final class CnpcCommands {
 
     private static int setNightMode(CommandContext<CommandSourceStack> context, String npcId, boolean enabled) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -266,7 +265,7 @@ public final class CnpcCommands {
 
     private static int debugNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -277,7 +276,7 @@ public final class CnpcCommands {
 
     private static int unstickNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -289,7 +288,7 @@ public final class CnpcCommands {
 
     private static int addNightRefuge(CommandContext<CommandSourceStack> context, String npcId, int waitSeconds) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -301,7 +300,7 @@ public final class CnpcCommands {
 
     private static int clearNightRefuge(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -313,7 +312,7 @@ public final class CnpcCommands {
 
     private static int listNightRefuge(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -325,7 +324,7 @@ public final class CnpcCommands {
 
     private static int addPoi(CommandContext<CommandSourceStack> context, String npcId, int waitSeconds) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -340,7 +339,7 @@ public final class CnpcCommands {
 
     private static int clearPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -352,7 +351,7 @@ public final class CnpcCommands {
 
     private static int listPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -364,7 +363,7 @@ public final class CnpcCommands {
 
     private static int removeNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = findNpcById(player.serverLevel(), npcId);
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
         if (npc.isEmpty()) {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
@@ -376,7 +375,7 @@ public final class CnpcCommands {
 
     private static int listNpcs(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        List<String> npcIds = getNpcIds(player.serverLevel());
+        List<String> npcIds = NpcRegistry.listNpcIds(player.getServer());
         String ids = npcIds.isEmpty() ? "(sin NPCs)" : String.join(", ", npcIds);
         context.getSource().sendSuccess(() -> Component.literal("NPCs: " + ids), false);
         return 1;
@@ -417,7 +416,7 @@ public final class CnpcCommands {
     private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestNpcIds(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         try {
             ServerPlayer player = context.getSource().getPlayerOrException();
-            return SharedSuggestionProvider.suggest(getNpcIds(player.serverLevel()), builder);
+            return SharedSuggestionProvider.suggest(NpcRegistry.listNpcIds(player.getServer()), builder);
         } catch (CommandSyntaxException e) {
             return CompletableFuture.completedFuture(builder.build());
         }
@@ -434,28 +433,6 @@ public final class CnpcCommands {
             throw WRONG_ENTITY.create();
         }
         return npc;
-    }
-
-    private static Optional<CnpcEntity> findNpcById(ServerLevel level, String npcId) {
-        for (ServerLevel serverLevel : level.getServer().getAllLevels()) {
-            for (Entity entity : serverLevel.getAllEntities()) {
-                if (entity instanceof CnpcEntity npc && npc.getNpcId().equalsIgnoreCase(npcId)) {
-                    return Optional.of(npc);
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static List<String> getNpcIds(ServerLevel level) {
-        return StreamSupport.stream(level.getServer().getAllLevels().spliterator(), false)
-            .flatMap(serverLevel -> StreamSupport.stream(serverLevel.getAllEntities().spliterator(), false))
-            .filter(CnpcEntity.class::isInstance)
-            .map(CnpcEntity.class::cast)
-            .map(CnpcEntity::getNpcId)
-            .filter(id -> !id.isBlank())
-            .sorted()
-            .toList();
     }
 
     private static Optional<EntityHitResult> raycastEntity(ServerPlayer player, double maxDistance) {

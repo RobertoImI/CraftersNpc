@@ -632,7 +632,12 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setNpcId(String npcId) {
-        entityData.set(NPC_ID, npcId.toLowerCase(Locale.ROOT));
+        String previousNpcId = getNpcId();
+        String normalizedNpcId = npcId.toLowerCase(Locale.ROOT);
+        entityData.set(NPC_ID, normalizedNpcId);
+        if (!level().isClientSide) {
+            NpcRegistry.updateNpcId(this, previousNpcId, normalizedNpcId);
+        }
     }
 
     public String getNpcId() {
@@ -901,6 +906,22 @@ public class CnpcEntity extends PathfinderMob {
     @Override
     public boolean removeWhenFarAway(double distanceToClosestPlayer) {
         return false;
+    }
+
+    @Override
+    public void onAddedToLevel() {
+        super.onAddedToLevel();
+        if (!level().isClientSide) {
+            NpcRegistry.track(this);
+        }
+    }
+
+    @Override
+    public void remove(RemovalReason reason) {
+        if (!level().isClientSide) {
+            NpcRegistry.untrack(this);
+        }
+        super.remove(reason);
     }
 
     public static CnpcEntity spawn(ServerLevel level, Vec3 pos, String npcId, boolean slimModel) {
