@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc;
 
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayList;
@@ -74,7 +75,7 @@ public final class NpcRegistry {
             return Optional.empty();
         }
 
-        Entity entity = server.getEntity(uuid);
+        Entity entity = resolveEntity(server, uuid);
         if (entity instanceof CnpcEntity npc) {
             return Optional.of(npc);
         }
@@ -87,13 +88,23 @@ public final class NpcRegistry {
     public static List<String> listNpcIds(MinecraftServer server) {
         List<String> ids = new ArrayList<>(NPC_BY_ID.size());
         for (Map.Entry<String, UUID> entry : NPC_BY_ID.entrySet()) {
-            Entity entity = server.getEntity(entry.getValue());
+            Entity entity = resolveEntity(server, entry.getValue());
             if (entity instanceof CnpcEntity) {
                 ids.add(entry.getKey());
             }
         }
         ids.sort(String::compareTo);
         return ids;
+    }
+
+    private static Entity resolveEntity(MinecraftServer server, UUID uuid) {
+        for (ServerLevel serverLevel : server.getAllLevels()) {
+            Entity entity = serverLevel.getEntity(uuid);
+            if (entity != null) {
+                return entity;
+            }
+        }
+        return null;
     }
 
     private static String normalize(String npcId) {
