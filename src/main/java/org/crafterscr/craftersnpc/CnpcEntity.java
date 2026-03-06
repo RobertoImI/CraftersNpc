@@ -49,6 +49,8 @@ public class CnpcEntity extends PathfinderMob {
     private boolean nightModeOnly;
     private int repathTicks;
     private int stuckTicks;
+    private Vec3 lastProgressPos = Vec3.ZERO;
+    private int noProgressTicks;
 
     private PoiState poiState = PoiState.NONE;
     private int poiIndex = -1;
@@ -113,6 +115,7 @@ public class CnpcEntity extends PathfinderMob {
         if (!routeEnabled) {
             repathTicks = 0;
             stuckTicks = 0;
+            noProgressTicks = 0;
             return;
         }
 
@@ -120,6 +123,7 @@ public class CnpcEntity extends PathfinderMob {
         if (points.isEmpty()) {
             repathTicks = 0;
             stuckTicks = 0;
+            noProgressTicks = 0;
             return;
         }
 
@@ -143,6 +147,7 @@ public class CnpcEntity extends PathfinderMob {
             getNavigation().stop();
             repathTicks = 0;
             stuckTicks = 0;
+            noProgressTicks = 0;
 
             if (waitTicks == 0) {
                 if (nightModeState == NightModeState.AT_REFUGE) {
@@ -169,6 +174,8 @@ public class CnpcEntity extends PathfinderMob {
             waitTicks = currentWaitTicks(points);
             repathTicks = 0;
             stuckTicks = 0;
+            noProgressTicks = 0;
+            lastProgressPos = position();
             if (waitTicks <= 0) {
                 advanceAfterReached(points);
                 Vec3 nextCenter = currentTargetPos(points);
@@ -176,6 +183,8 @@ public class CnpcEntity extends PathfinderMob {
             }
             return;
         }
+
+        trackMovementStall(points);
 
         repathTicks++;
         if (repathTicks >= 10 || getNavigation().isDone()) {
@@ -191,6 +200,52 @@ public class CnpcEntity extends PathfinderMob {
                 stuckTicks = 0;
             }
         }
+    }
+
+    private void trackMovementStall(List<RoutePoint> points) {
+        Vec3 currentPos = position();
+        if (currentPos.distanceToSqr(lastProgressPos) <= 0.04D) {
+            noProgressTicks++;
+        } else {
+            lastProgressPos = currentPos;
+            noProgressTicks = 0;
+        }
+
+        if (noProgressTicks < 100) {
+            return;
+        }
+
+        noProgressTicks = 0;
+        recoverFromStall(points);
+        Vec3 nextCenter = currentTargetPos(points);
+        getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
+    }
+
+    private void recoverFromStall(List<RoutePoint> baseRoute) {
+        waitTicks = 0;
+        repathTicks = 0;
+        stuckTicks = 0;
+
+        if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+            nightModeState = NightModeState.RETURNING_TO_ROUTE;
+            nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, baseRoute.size() - 1);
+            return;
+        }
+
+        if (poiState == PoiState.TO_POI || poiState == PoiState.AT_POI) {
+            poiState = PoiState.RETURNING;
+            poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, baseRoute.size() - 1);
+            return;
+        }
+
+        if (poiState == PoiState.RETURNING) {
+            poiState = PoiState.NONE;
+            poiIndex = -1;
+            poiCheckCooldown = 20 * 45;
+            return;
+        }
+
+        advanceIndex(baseRoute);
     }
 
     private void tickDoorInteraction() {
@@ -322,6 +377,7 @@ public class CnpcEntity extends PathfinderMob {
         waitTicks = 0;
         repathTicks = 0;
         stuckTicks = 0;
+        noProgressTicks = 0;
         poiState = PoiState.NONE;
         poiIndex = -1;
     }
@@ -411,6 +467,7 @@ public class CnpcEntity extends PathfinderMob {
         waitTicks = 0;
         repathTicks = 0;
         stuckTicks = 0;
+        noProgressTicks = 0;
         poiCheckCooldown = 20 * 90;
     }
 
@@ -526,6 +583,7 @@ public class CnpcEntity extends PathfinderMob {
         routeEnabled = false;
         repathTicks = 0;
         stuckTicks = 0;
+        noProgressTicks = 0;
         poiState = PoiState.NONE;
         poiIndex = -1;
         nightModeState = NightModeState.NONE;
@@ -538,6 +596,7 @@ public class CnpcEntity extends PathfinderMob {
         if (!routeEnabled) {
             repathTicks = 0;
             stuckTicks = 0;
+            noProgressTicks = 0;
             getNavigation().stop();
         }
     }
@@ -567,6 +626,7 @@ public class CnpcEntity extends PathfinderMob {
         waitTicks = 0;
         repathTicks = 0;
         stuckTicks = 0;
+        noProgressTicks = 0;
         poiState = PoiState.NONE;
         poiIndex = -1;
         nightModeState = NightModeState.NONE;
