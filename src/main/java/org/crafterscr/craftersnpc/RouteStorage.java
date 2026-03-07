@@ -65,7 +65,7 @@ public class RouteStorage extends SavedData {
             List<RoutePoint> routePoints = new ArrayList<>();
             for (Tag pointTag : points) {
                 CompoundTag point = (CompoundTag) pointTag;
-                routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), Mth.clamp(point.getInt("Wait"), 0, 3600 * 20)));
+                routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), decodeWaitTicks(point)));
             }
             storage.routes.put(key.toLowerCase(Locale.ROOT), routePoints);
         }
@@ -83,12 +83,21 @@ public class RouteStorage extends SavedData {
                 pointTag.putDouble("Y", point.y());
                 pointTag.putDouble("Z", point.z());
                 pointTag.putInt("Wait", point.waitTicks());
+                pointTag.putBoolean("WaitIsTicks", true);
                 points.add(pointTag);
             }
             routesTag.put(key, points);
         });
         tag.put("Routes", routesTag);
         return tag;
+    }
+
+    private static int decodeWaitTicks(CompoundTag point) {
+        int rawWait = point.getInt("Wait");
+        if (point.contains("WaitIsTicks", Tag.TAG_BYTE) && point.getBoolean("WaitIsTicks")) {
+            return Mth.clamp(rawWait, 0, 3600 * 20);
+        }
+        return Mth.clamp(rawWait, 0, 3600) * 20;
     }
 
     public record RoutePoint(double x, double y, double z, int waitTicks) {

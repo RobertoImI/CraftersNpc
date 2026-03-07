@@ -451,6 +451,7 @@ public class CnpcEntity extends PathfinderMob {
         }
         if (poiState == PoiState.AT_POI) {
             poiState = PoiState.RETURNING;
+            waitTicks = 0;
             return;
         }
         if (poiState == PoiState.RETURNING) {
@@ -766,6 +767,15 @@ public class CnpcEntity extends PathfinderMob {
         getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
     }
 
+
+    private static int decodeWaitTicks(CompoundTag pointTag) {
+        int rawWait = pointTag.getInt("Wait");
+        if (pointTag.contains("WaitIsTicks", Tag.TAG_BYTE) && pointTag.getBoolean("WaitIsTicks")) {
+            return normalizeWaitTicks(rawWait);
+        }
+        return normalizeWaitTicks(rawWait * 20);
+    }
+
     private void closeInteractingDoorIfAny() {
         if (interactingDoorPos != null) {
             setDoorOpen(interactingDoorPos, false);
@@ -803,6 +813,7 @@ public class CnpcEntity extends PathfinderMob {
             p.putDouble("Y", point.pos().y);
             p.putDouble("Z", point.pos().z);
             p.putInt("Wait", point.waitTicks());
+            p.putBoolean("WaitIsTicks", true);
             points.add(p);
         }
         tag.put("Route", points);
@@ -814,6 +825,7 @@ public class CnpcEntity extends PathfinderMob {
             p.putDouble("Y", point.pos().y);
             p.putDouble("Z", point.pos().z);
             p.putInt("Wait", point.waitTicks());
+            p.putBoolean("WaitIsTicks", true);
             poiTag.add(p);
         }
         tag.put("Pois", poiTag);
@@ -825,6 +837,7 @@ public class CnpcEntity extends PathfinderMob {
             p.putDouble("Y", point.pos().y);
             p.putDouble("Z", point.pos().z);
             p.putInt("Wait", point.waitTicks());
+            p.putBoolean("WaitIsTicks", true);
             refugesTag.add(p);
         }
         tag.put("NightRefuges", refugesTag);
@@ -860,7 +873,7 @@ public class CnpcEntity extends PathfinderMob {
         ListTag points = tag.getList("Route", Tag.TAG_COMPOUND);
         for (Tag t : points) {
             CompoundTag p = (CompoundTag) t;
-            route.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), normalizeWaitTicks(p.getInt("Wait"))));
+            route.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
         }
         if (!route.isEmpty()) {
             routeIndex = Mth.clamp(routeIndex, 0, route.size() - 1);
@@ -872,7 +885,7 @@ public class CnpcEntity extends PathfinderMob {
         ListTag pois = tag.getList("Pois", Tag.TAG_COMPOUND);
         for (Tag t : pois) {
             CompoundTag p = (CompoundTag) t;
-            poiPoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), normalizeWaitTicks(p.getInt("Wait"))));
+            poiPoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
         }
         if (poiPoints.size() > 1) {
             RoutePoint firstPoi = poiPoints.getFirst();
@@ -889,7 +902,7 @@ public class CnpcEntity extends PathfinderMob {
         ListTag refuges = tag.getList("NightRefuges", Tag.TAG_COMPOUND);
         for (Tag t : refuges) {
             CompoundTag p = (CompoundTag) t;
-            nightRefugePoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), normalizeWaitTicks(p.getInt("Wait"))));
+            nightRefugePoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
         }
         if (nightRefugePoints.isEmpty() || nightRefugeIndex < 0 || nightRefugeIndex >= nightRefugePoints.size()) {
             nightModeState = NightModeState.NONE;
