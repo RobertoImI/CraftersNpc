@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -62,6 +63,11 @@ public final class CnpcCommands {
                         .then(Commands.literal("pacifico").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.PACIFICO)))
                         .then(Commands.literal("agresivo").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.AGRESIVO)))
                         .then(Commands.literal("aleatorio").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.ALEATORIO)))))
+                .then(Commands.literal("speed")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.05D, 1.0D))
+                            .executes(ctx -> setWalkSpeed(ctx, StringArgumentType.getString(ctx, "npcId"), DoubleArgumentType.getDouble(ctx, "value"))))))
                 .then(Commands.literal("debug")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -267,6 +273,18 @@ public final class CnpcCommands {
         }
         npc.get().setTemperament(temperament);
         context.getSource().sendSuccess(() -> Component.literal("Temperamento de " + npcId + " = " + temperament.name().toLowerCase(Locale.ROOT)), true);
+        return 1;
+    }
+
+    private static int setWalkSpeed(CommandContext<CommandSourceStack> context, String npcId, double speed) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setWalkSpeed(speed);
+        context.getSource().sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "Velocidad de caminata de %s = %.2f", npcId, npc.get().getWalkSpeed())), true);
         return 1;
     }
 

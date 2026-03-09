@@ -34,6 +34,9 @@ import java.util.Locale;
 import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
+    public static final double DEFAULT_WALK_SPEED = 0.25D;
+    private static final double MIN_WALK_SPEED = 0.05D;
+    private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -66,6 +69,7 @@ public class CnpcEntity extends PathfinderMob {
     private UUID reactivePlayerUuid;
     private int reactiveTicks;
     private int reactiveAttackCooldown;
+    private double walkSpeed = DEFAULT_WALK_SPEED;
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -74,7 +78,7 @@ public class CnpcEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.25D)
+            .add(Attributes.MOVEMENT_SPEED, DEFAULT_WALK_SPEED)
             .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.FOLLOW_RANGE, 24.0D);
     }
@@ -153,7 +157,7 @@ public class CnpcEntity extends PathfinderMob {
             }
             if (distanceToSqr(player) <= 4.0D && reactiveAttackCooldown <= 0) {
                 swing(InteractionHand.MAIN_HAND);
-                doHurtTarget(player);
+                player.hurt(damageSources().playerAttack(player), 1.0F);
                 reactiveAttackCooldown = 15;
             }
         } else if (reactionState == ReactionState.FLEEING) {
@@ -182,7 +186,7 @@ public class CnpcEntity extends PathfinderMob {
         };
 
         reactivePlayerUuid = player.getUUID();
-        reactiveTicks = 20 * 6;
+        reactiveTicks = 20 * 8;
         reactiveAttackCooldown = 0;
         waitTicks = 0;
         resetMovementTracking();
@@ -656,6 +660,17 @@ public class CnpcEntity extends PathfinderMob {
         return nightModeOnly;
     }
 
+    public double getWalkSpeed() {
+        return walkSpeed;
+    }
+
+    public void setWalkSpeed(double speed) {
+        walkSpeed = Mth.clamp(speed, MIN_WALK_SPEED, MAX_WALK_SPEED);
+        if (getAttribute(Attributes.MOVEMENT_SPEED) != null) {
+            getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(walkSpeed);
+        }
+    }
+
     public void setNightModeOnly(boolean nightModeOnly) {
         this.nightModeOnly = nightModeOnly;
         if (!nightModeOnly) {
@@ -696,6 +711,7 @@ public class CnpcEntity extends PathfinderMob {
             + ", stuckTicks=" + stuckTicks
             + ", noProgressTicks=" + noProgressTicks
             + ", nightModeOnly=" + nightModeOnly
+            + ", walkSpeed=" + String.format(Locale.ROOT, "%.2f", walkSpeed)
             + ", temperament=" + getTemperament().id
             + ", reaction=" + reactionState
             + ", reactiveTicks=" + reactiveTicks
@@ -775,6 +791,7 @@ public class CnpcEntity extends PathfinderMob {
         tag.putBoolean("SlimModel", isSlimModel());
         tag.putBoolean("RouteEnabled", routeEnabled);
         tag.putBoolean("NightModeOnly", nightModeOnly);
+        tag.putDouble("WalkSpeed", walkSpeed);
         tag.putString("Temperament", getTemperament().id);
         tag.putInt("RouteIndex", routeIndex);
         tag.putBoolean("MovingForward", movingForward);
@@ -819,6 +836,7 @@ public class CnpcEntity extends PathfinderMob {
         setSlimModel(tag.getBoolean("SlimModel"));
         routeEnabled = tag.getBoolean("RouteEnabled");
         nightModeOnly = tag.getBoolean("NightModeOnly");
+        setWalkSpeed(tag.contains("WalkSpeed", Tag.TAG_DOUBLE) ? tag.getDouble("WalkSpeed") : DEFAULT_WALK_SPEED);
         setTemperament(Temperament.fromId(tag.getString("Temperament")));
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
