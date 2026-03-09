@@ -108,6 +108,6 @@ public final class NpcRegistry {
     }
 
     private static String normalize(String npcId) {
-        return npcId.toLowerCase(Locale.ROOT);
+        return npcId == null ? "" : npcId.toLowerCase(Locale.ROOT);
     }
 }

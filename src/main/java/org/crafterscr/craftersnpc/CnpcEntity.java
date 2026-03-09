@@ -504,12 +504,12 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setSkinId(String skinId) {
-        entityData.set(SKIN_ID, skinId.toLowerCase(Locale.ROOT));
+        entityData.set(SKIN_ID, normalizeId(skinId));
     }
 
     public void setNpcId(String npcId) {
         String previousNpcId = getNpcId();
-        String normalizedNpcId = npcId.toLowerCase(Locale.ROOT);
+        String normalizedNpcId = normalizeId(npcId);
         entityData.set(NPC_ID, normalizedNpcId);
         if (!level().isClientSide) {
             NpcRegistry.updateNpcId(this, previousNpcId, normalizedNpcId);
@@ -521,7 +521,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setAssignedRouteId(String routeId) {
-        entityData.set(ROUTE_ID, routeId.toLowerCase(Locale.ROOT));
+        entityData.set(ROUTE_ID, normalizeId(routeId));
         cachedRoute = List.of();
         cachedStoredRouteSource = List.of();
         routeIndex = 0;
@@ -632,6 +632,14 @@ public class CnpcEntity extends PathfinderMob {
     }
 
 
+    private static boolean isFinite(Vec3 pos) {
+        return Double.isFinite(pos.x) && Double.isFinite(pos.y) && Double.isFinite(pos.z);
+    }
+
+    private static String normalizeId(String raw) {
+        return raw == null ? "" : raw.toLowerCase(Locale.ROOT);
+    }
+
     private static int decodeWaitTicks(CompoundTag pointTag) {
         int rawWait = pointTag.getInt("Wait");
         if (pointTag.contains("WaitIsTicks", Tag.TAG_BYTE) && pointTag.getBoolean("WaitIsTicks")) {
@@ -694,17 +702,17 @@ public class CnpcEntity extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        setSkinId(tag.getString("Skin"));
-        setNpcId(tag.getString("NpcId"));
-        setAssignedRouteId(tag.getString("RouteId"));
+        setSkinId(tag.contains("Skin", Tag.TAG_STRING) ? tag.getString("Skin") : "steve");
+        setNpcId(tag.contains("NpcId", Tag.TAG_STRING) ? tag.getString("NpcId") : "");
+        setAssignedRouteId(tag.contains("RouteId", Tag.TAG_STRING) ? tag.getString("RouteId") : "");
         setSlimModel(tag.getBoolean("SlimModel"));
         routeEnabled = tag.getBoolean("RouteEnabled");
         nightModeOnly = tag.getBoolean("NightModeOnly");
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
-        waitTicks = tag.getInt("WaitTicks");
-        repathTicks = tag.getInt("RepathTicks");
-        stuckTicks = tag.getInt("StuckTicks");
+        waitTicks = normalizeWaitTicks(tag.getInt("WaitTicks"));
+        repathTicks = Mth.clamp(tag.getInt("RepathTicks"), 0, 200);
+        stuckTicks = Mth.clamp(tag.getInt("StuckTicks"), 0, 200);
 
         int nightStateIndex = tag.getInt("NightModeState");
         nightModeState = nightStateIndex >= 0 && nightStateIndex < NightModeState.values().length ? NightModeState.values()[nightStateIndex] : NightModeState.NONE;
@@ -715,7 +723,10 @@ public class CnpcEntity extends PathfinderMob {
         ListTag points = tag.getList("Route", Tag.TAG_COMPOUND);
         for (Tag t : points) {
             CompoundTag p = (CompoundTag) t;
-            route.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
+            Vec3 pos = new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z"));
+            if (isFinite(pos)) {
+                route.add(new RoutePoint(pos, decodeWaitTicks(p)));
+            }
         }
         if (!route.isEmpty()) {
             routeIndex = Mth.clamp(routeIndex, 0, route.size() - 1);
@@ -727,7 +738,10 @@ public class CnpcEntity extends PathfinderMob {
         ListTag refuges = tag.getList("NightRefuges", Tag.TAG_COMPOUND);
         for (Tag t : refuges) {
             CompoundTag p = (CompoundTag) t;
-            nightRefugePoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
+            Vec3 pos = new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z"));
+            if (isFinite(pos)) {
+                nightRefugePoints.add(new RoutePoint(pos, decodeWaitTicks(p)));
+            }
         }
         if (nightRefugePoints.isEmpty() || nightRefugeIndex < 0 || nightRefugeIndex >= nightRefugePoints.size()) {
             nightModeState = NightModeState.NONE;

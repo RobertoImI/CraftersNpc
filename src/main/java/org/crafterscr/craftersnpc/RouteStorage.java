@@ -26,12 +26,17 @@ public class RouteStorage extends SavedData {
     }
 
     public void saveRoute(String routeId, List<RoutePoint> points) {
-        routes.put(routeId.toLowerCase(Locale.ROOT), List.copyOf(points));
+        String normalizedRouteId = normalizeRouteId(routeId);
+        List<RoutePoint> sanitizedPoints = points.stream()
+            .filter(RouteStorage::isFinite)
+            .map(point -> new RoutePoint(point.x(), point.y(), point.z(), Mth.clamp(point.waitTicks(), 0, 3600 * 20)))
+            .toList();
+        routes.put(normalizedRouteId, sanitizedPoints);
         setDirty();
     }
 
     public List<RoutePoint> getRoute(String routeId) {
-        return routes.getOrDefault(routeId.toLowerCase(Locale.ROOT), List.of());
+        return routes.getOrDefault(normalizeRouteId(routeId), List.of());
     }
 
     public Set<String> routeIds() {
@@ -45,11 +50,11 @@ public class RouteStorage extends SavedData {
     }
 
     public boolean hasRoute(String routeId) {
-        return routes.containsKey(routeId.toLowerCase(Locale.ROOT));
+        return routes.containsKey(normalizeRouteId(routeId));
     }
 
     public boolean removeRoute(String routeId) {
-        String normalized = routeId.toLowerCase(Locale.ROOT);
+        String normalized = normalizeRouteId(routeId);
         if (routes.remove(normalized) != null) {
             setDirty();
             return true;
@@ -98,6 +103,14 @@ public class RouteStorage extends SavedData {
             return Mth.clamp(rawWait, 0, 3600 * 20);
         }
         return Mth.clamp(rawWait, 0, 3600) * 20;
+    }
+
+    private static boolean isFinite(RoutePoint point) {
+        return Double.isFinite(point.x()) && Double.isFinite(point.y()) && Double.isFinite(point.z());
+    }
+
+    private static String normalizeRouteId(String routeId) {
+        return routeId == null ? "" : routeId.toLowerCase(Locale.ROOT);
     }
 
     public record RoutePoint(double x, double y, double z, int waitTicks) {
