@@ -84,21 +84,6 @@ public final class CnpcCommands {
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
                             .executes(ctx -> listNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId"))))))
-                .then(Commands.literal("poi")
-                    .then(Commands.literal("add")
-                        .then(Commands.argument("npcId", StringArgumentType.word())
-                            .suggests(CnpcCommands::suggestNpcIds)
-                            .executes(ctx -> addPoi(ctx, StringArgumentType.getString(ctx, "npcId"), 5))
-                            .then(Commands.argument("waitSeconds", IntegerArgumentType.integer(0, 3600))
-                                .executes(ctx -> addPoi(ctx, StringArgumentType.getString(ctx, "npcId"), IntegerArgumentType.getInteger(ctx, "waitSeconds"))))))
-                    .then(Commands.literal("clear")
-                        .then(Commands.argument("npcId", StringArgumentType.word())
-                            .suggests(CnpcCommands::suggestNpcIds)
-                            .executes(ctx -> clearPoi(ctx, StringArgumentType.getString(ctx, "npcId")))))
-                    .then(Commands.literal("list")
-                        .then(Commands.argument("npcId", StringArgumentType.word())
-                            .suggests(CnpcCommands::suggestNpcIds)
-                            .executes(ctx -> listPoi(ctx, StringArgumentType.getString(ctx, "npcId"))))))
                 .then(Commands.literal("remove")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -322,44 +307,8 @@ public final class CnpcCommands {
         return 1;
     }
 
-    private static int addPoi(CommandContext<CommandSourceStack> context, String npcId, int waitSeconds) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
-        if (npc.isEmpty()) {
-            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
-            return 0;
-        }
-        if (!npc.get().addPoiPoint(player.position(), waitSeconds)) {
-            context.getSource().sendFailure(Component.literal("El NPC " + npcId + " ya tiene un POI asignado. Usa /cnpc npc poi clear " + npcId + " para reemplazarlo."));
-            return 0;
-        }
-        context.getSource().sendSuccess(() -> Component.literal("POI agregado a " + npcId + " en tu posición actual."), true);
-        return 1;
-    }
 
-    private static int clearPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
-        if (npc.isEmpty()) {
-            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
-            return 0;
-        }
-        npc.get().clearPoiPoints();
-        context.getSource().sendSuccess(() -> Component.literal("POIs removidos para " + npcId), true);
-        return 1;
-    }
 
-    private static int listPoi(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
-        if (npc.isEmpty()) {
-            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
-            return 0;
-        }
-        List<String> summary = npc.get().poiSummary();
-        context.getSource().sendSuccess(() -> Component.literal("POIs de " + npcId + ": " + (summary.isEmpty() ? "(sin POIs)" : String.join(" | ", summary))), false);
-        return 1;
-    }
 
     private static int removeNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();

@@ -10,7 +10,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -33,17 +32,12 @@ import java.util.List;
 import java.util.Locale;
 
 public class CnpcEntity extends PathfinderMob {
-    private static final int POI_CHECK_COOLDOWN_AFTER_STALL = 20 * 45;
-    private static final int POI_CHECK_COOLDOWN_AFTER_RETURN = 20 * 30;
-    private static final int POI_CHECK_COOLDOWN_AFTER_DETOUR_START = 20 * 90;
-
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
 
     private final List<RoutePoint> route = new ArrayList<>();
-    private final List<RoutePoint> poiPoints = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
 
     private int routeIndex;
@@ -55,11 +49,6 @@ public class CnpcEntity extends PathfinderMob {
     private int stuckTicks;
     private Vec3 lastProgressPos = Vec3.ZERO;
     private int noProgressTicks;
-
-    private PoiState poiState = PoiState.NONE;
-    private int poiIndex = -1;
-    private int poiReturnRouteIndex;
-    private int poiCheckCooldown;
 
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
@@ -125,7 +114,6 @@ public class CnpcEntity extends PathfinderMob {
         if (points.isEmpty()) {
             resetMovementTracking();
             waitTicks = 0;
-            resetPoiState();
             resetNightState();
             closeInteractingDoorIfAny();
             getNavigation().stop();
@@ -139,18 +127,9 @@ public class CnpcEntity extends PathfinderMob {
 
         routeIndex = Mth.clamp(routeIndex, 0, points.size() - 1);
         nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, points.size() - 1);
-        poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, points.size() - 1);
 
         updateNightModeState(points);
 
-        if (nightModeState == NightModeState.NONE) {
-            if (poiCheckCooldown > 0) {
-                poiCheckCooldown--;
-            }
-            if (poiState == PoiState.NONE && shouldStartPoiDetour()) {
-                startPoiDetour();
-            }
-        }
 
         if (waitTicks > 0) {
             waitTicks--;
@@ -227,20 +206,6 @@ public class CnpcEntity extends PathfinderMob {
         if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
             nightModeState = NightModeState.RETURNING_TO_ROUTE;
             nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, baseRoute.size() - 1);
-            return;
-        }
-
-        if (poiState == PoiState.TO_POI || poiState == PoiState.AT_POI) {
-            poiState = PoiState.RETURNING;
-            poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, baseRoute.size() - 1);
-            return;
-        }
-
-        if (poiState == PoiState.RETURNING) {
-            poiState = PoiState.NONE;
-            poiIndex = -1;
-            poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_STALL;
-            advanceIndex(baseRoute);
             return;
         }
 
@@ -373,7 +338,6 @@ public class CnpcEntity extends PathfinderMob {
         nightModeState = NightModeState.GOING_TO_REFUGE;
         waitTicks = 0;
         resetMovementTracking();
-        resetPoiState();
     }
 
     private Vec3 currentTargetPos(List<RoutePoint> baseRoute) {
@@ -388,18 +352,7 @@ public class CnpcEntity extends PathfinderMob {
             return baseRoute.get(nightReturnRouteIndex).pos();
         }
 
-        return switch (poiState) {
-            case TO_POI, AT_POI -> {
-                if (isValidPoiTarget()) {
-                    yield poiPoints.get(poiIndex).pos();
-                }
-                CraftersNpc.LOGGER.debug("POI target inválido para NPC {} (state={}, index={})", getNpcId(), poiState, poiIndex);
-                resetPoiState();
-                yield baseRoute.get(routeIndex).pos();
-            }
-            case RETURNING -> baseRoute.get(poiReturnRouteIndex).pos();
-            case NONE -> baseRoute.get(routeIndex).pos();
-        };
+        return baseRoute.get(routeIndex).pos();
     }
 
     private int currentWaitTicks(List<RoutePoint> baseRoute) {
@@ -414,17 +367,7 @@ public class CnpcEntity extends PathfinderMob {
             return 0;
         }
 
-        return switch (poiState) {
-            case TO_POI, AT_POI -> {
-                if (isValidPoiTarget()) {
-                    yield poiPoints.get(poiIndex).waitTicks();
-                }
-                resetPoiState();
-                yield baseRoute.get(routeIndex).waitTicks();
-            }
-            case RETURNING -> 0;
-            case NONE -> baseRoute.get(routeIndex).waitTicks();
-        };
+        return baseRoute.get(routeIndex).waitTicks();
     }
 
     private void advanceAfterReached(List<RoutePoint> baseRoute) {
@@ -445,42 +388,7 @@ public class CnpcEntity extends PathfinderMob {
             return;
         }
 
-        if (poiState == PoiState.TO_POI) {
-            poiState = PoiState.AT_POI;
-            return;
-        }
-        if (poiState == PoiState.AT_POI) {
-            poiState = PoiState.RETURNING;
-            waitTicks = 0;
-            return;
-        }
-        if (poiState == PoiState.RETURNING) {
-            resetPoiState();
-            poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_RETURN;
-            return;
-        }
-
         advanceIndex(baseRoute);
-    }
-
-    private boolean shouldStartPoiDetour() {
-        if (poiPoints.isEmpty() || poiCheckCooldown > 0 || random.nextInt(100) >= 3) {
-            return false;
-        }
-        return !level().isClientSide;
-    }
-
-    private void startPoiDetour() {
-        if (poiPoints.isEmpty()) {
-            return;
-        }
-        RandomSource rng = getRandom();
-        poiIndex = rng.nextInt(poiPoints.size());
-        poiReturnRouteIndex = routeIndex;
-        poiState = PoiState.TO_POI;
-        waitTicks = 0;
-        resetMovementTracking();
-        poiCheckCooldown = POI_CHECK_COOLDOWN_AFTER_DETOUR_START;
     }
 
     private List<RoutePoint> currentRoute() {
@@ -543,32 +451,6 @@ public class CnpcEntity extends PathfinderMob {
         return first.distManhattan(last) <= 1;
     }
 
-    public boolean addPoiPoint(Vec3 pos, int waitSeconds) {
-        if (!poiPoints.isEmpty()) {
-            return false;
-        }
-        poiPoints.add(new RoutePoint(pos, Mth.clamp(waitSeconds, 0, 3600) * 20));
-        return true;
-    }
-
-    public void clearPoiPoints() {
-        poiPoints.clear();
-        resetPoiState();
-        waitTicks = 0;
-        resetMovementTracking();
-        lastProgressPos = position();
-        reengageRouteNavigation();
-    }
-
-    public List<String> poiSummary() {
-        List<String> summary = new ArrayList<>();
-        for (int i = 0; i < poiPoints.size(); i++) {
-            RoutePoint point = poiPoints.get(i);
-            summary.add("#" + i + " (" + Mth.floor(point.pos().x) + "," + Mth.floor(point.pos().y) + "," + Mth.floor(point.pos().z) + ") wait=" + (point.waitTicks() / 20) + "s");
-        }
-        return summary;
-    }
-
     public void addNightRefugePoint(Vec3 pos, int waitSeconds) {
         nightRefugePoints.add(new RoutePoint(pos, Mth.clamp(waitSeconds, 0, 3600) * 20));
     }
@@ -600,7 +482,6 @@ public class CnpcEntity extends PathfinderMob {
         waitTicks = 0;
         routeEnabled = false;
         resetMovementTracking();
-        resetPoiState();
         resetNightState();
         closeInteractingDoorIfAny();
         getNavigation().stop();
@@ -647,7 +528,6 @@ public class CnpcEntity extends PathfinderMob {
         movingForward = true;
         waitTicks = 0;
         resetMovementTracking();
-        resetPoiState();
         resetNightState();
         closeInteractingDoorIfAny();
         reengageRouteNavigation();
@@ -690,7 +570,6 @@ public class CnpcEntity extends PathfinderMob {
         }
         routeIndex = Mth.clamp(routeIndex, 0, points.size() - 1);
         nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, points.size() - 1);
-        poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, points.size() - 1);
         recoverFromStall(points);
         lastProgressPos = position();
         Vec3 nextCenter = currentTargetPos(points);
@@ -709,11 +588,6 @@ public class CnpcEntity extends PathfinderMob {
             + ", repathTicks=" + repathTicks
             + ", stuckTicks=" + stuckTicks
             + ", noProgressTicks=" + noProgressTicks
-            + ", poiState=" + poiState
-            + ", poiIndex=" + poiIndex
-            + ", poiCount=" + poiPoints.size()
-            + ", poiReturnRouteIndex=" + poiReturnRouteIndex
-            + ", poiCheckCooldown=" + poiCheckCooldown
             + ", nightModeOnly=" + nightModeOnly
             + ", nightState=" + nightModeState
             + ", nightRefugeIndex=" + nightRefugeIndex
@@ -733,18 +607,9 @@ public class CnpcEntity extends PathfinderMob {
         noProgressTicks = 0;
     }
 
-    private void resetPoiState() {
-        poiState = PoiState.NONE;
-        poiIndex = -1;
-    }
-
     private void resetNightState() {
         nightModeState = NightModeState.NONE;
         nightRefugeIndex = -1;
-    }
-
-    private boolean isValidPoiTarget() {
-        return poiIndex >= 0 && poiIndex < poiPoints.size();
     }
 
     private boolean isValidNightTarget() {
@@ -762,7 +627,6 @@ public class CnpcEntity extends PathfinderMob {
         }
         routeIndex = Mth.clamp(routeIndex, 0, points.size() - 1);
         nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, points.size() - 1);
-        poiReturnRouteIndex = Mth.clamp(poiReturnRouteIndex, 0, points.size() - 1);
         Vec3 nextCenter = currentTargetPos(points);
         getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
     }
@@ -798,10 +662,6 @@ public class CnpcEntity extends PathfinderMob {
         tag.putInt("WaitTicks", waitTicks);
         tag.putInt("RepathTicks", repathTicks);
         tag.putInt("StuckTicks", stuckTicks);
-        tag.putInt("PoiState", poiState.ordinal());
-        tag.putInt("PoiIndex", poiIndex);
-        tag.putInt("PoiReturnRouteIndex", poiReturnRouteIndex);
-        tag.putInt("PoiCheckCooldown", poiCheckCooldown);
         tag.putInt("NightModeState", nightModeState.ordinal());
         tag.putInt("NightRefugeIndex", nightRefugeIndex);
         tag.putInt("NightReturnRouteIndex", nightReturnRouteIndex);
@@ -817,18 +677,6 @@ public class CnpcEntity extends PathfinderMob {
             points.add(p);
         }
         tag.put("Route", points);
-
-        ListTag poiTag = new ListTag();
-        for (RoutePoint point : poiPoints) {
-            CompoundTag p = new CompoundTag();
-            p.putDouble("X", point.pos().x);
-            p.putDouble("Y", point.pos().y);
-            p.putDouble("Z", point.pos().z);
-            p.putInt("Wait", point.waitTicks());
-            p.putBoolean("WaitIsTicks", true);
-            poiTag.add(p);
-        }
-        tag.put("Pois", poiTag);
 
         ListTag refugesTag = new ListTag();
         for (RoutePoint point : nightRefugePoints) {
@@ -858,12 +706,6 @@ public class CnpcEntity extends PathfinderMob {
         repathTicks = tag.getInt("RepathTicks");
         stuckTicks = tag.getInt("StuckTicks");
 
-        int poiStateIndex = tag.getInt("PoiState");
-        poiState = poiStateIndex >= 0 && poiStateIndex < PoiState.values().length ? PoiState.values()[poiStateIndex] : PoiState.NONE;
-        poiIndex = tag.getInt("PoiIndex");
-        poiReturnRouteIndex = tag.getInt("PoiReturnRouteIndex");
-        poiCheckCooldown = tag.getInt("PoiCheckCooldown");
-
         int nightStateIndex = tag.getInt("NightModeState");
         nightModeState = nightStateIndex >= 0 && nightStateIndex < NightModeState.values().length ? NightModeState.values()[nightStateIndex] : NightModeState.NONE;
         nightRefugeIndex = tag.getInt("NightRefugeIndex");
@@ -879,23 +721,6 @@ public class CnpcEntity extends PathfinderMob {
             routeIndex = Mth.clamp(routeIndex, 0, route.size() - 1);
         } else {
             routeIndex = 0;
-        }
-
-        poiPoints.clear();
-        ListTag pois = tag.getList("Pois", Tag.TAG_COMPOUND);
-        for (Tag t : pois) {
-            CompoundTag p = (CompoundTag) t;
-            poiPoints.add(new RoutePoint(new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z")), decodeWaitTicks(p)));
-        }
-        if (poiPoints.size() > 1) {
-            RoutePoint firstPoi = poiPoints.getFirst();
-            poiPoints.clear();
-            poiPoints.add(firstPoi);
-        }
-
-        if (poiPoints.isEmpty() || poiIndex < 0 || poiIndex >= poiPoints.size()) {
-            poiState = PoiState.NONE;
-            poiIndex = -1;
         }
 
         nightRefugePoints.clear();
@@ -941,13 +766,6 @@ public class CnpcEntity extends PathfinderMob {
         entity.setSlimModel(slimModel);
         level.addFreshEntity(entity);
         return entity;
-    }
-
-    private enum PoiState {
-        NONE,
-        TO_POI,
-        AT_POI,
-        RETURNING
     }
 
     private enum NightModeState {
