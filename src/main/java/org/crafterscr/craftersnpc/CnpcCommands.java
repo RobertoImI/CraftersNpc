@@ -56,6 +56,12 @@ public final class CnpcCommands {
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                             .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId"))))))
+                .then(Commands.literal("temperament")
+                    .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestNpcIds)
+                        .then(Commands.literal("pacifico").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.PACIFICO)))
+                        .then(Commands.literal("agresivo").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.AGRESIVO)))
+                        .then(Commands.literal("aleatorio").executes(ctx -> setTemperament(ctx, StringArgumentType.getString(ctx, "npcId"), CnpcEntity.Temperament.ALEATORIO)))))
                 .then(Commands.literal("debug")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -89,7 +95,11 @@ public final class CnpcCommands {
                         .suggests(CnpcCommands::suggestNpcIds)
                         .executes(ctx -> removeNpc(ctx, StringArgumentType.getString(ctx, "npcId")))))
                 .then(Commands.literal("list")
-                    .executes(CnpcCommands::listNpcs)))
+                    .executes(CnpcCommands::listNpcs))
+                .then(Commands.literal("damage")
+                    .then(Commands.literal("on").executes(ctx -> setNpcDamage(ctx, true)))
+                    .then(Commands.literal("off").executes(ctx -> setNpcDamage(ctx, false)))
+                    .then(Commands.literal("status").executes(CnpcCommands::npcDamageStatus))))
             .then(Commands.literal("route")
                 .then(Commands.literal("edit")
                     .then(Commands.argument("routeId", StringArgumentType.word())
@@ -245,6 +255,32 @@ public final class CnpcCommands {
         }
         npc.get().setNightModeOnly(enabled);
         context.getSource().sendSuccess(() -> Component.literal("NightMode de " + npcId + " = " + enabled), true);
+        return 1;
+    }
+
+    private static int setTemperament(CommandContext<CommandSourceStack> context, String npcId, CnpcEntity.Temperament temperament) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setTemperament(temperament);
+        context.getSource().sendSuccess(() -> Component.literal("Temperamento de " + npcId + " = " + temperament.name().toLowerCase(Locale.ROOT)), true);
+        return 1;
+    }
+
+    private static int setNpcDamage(CommandContext<CommandSourceStack> context, boolean enabled) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        NpcSettingsStorage.get(player.serverLevel()).setNpcDamageEnabled(enabled);
+        context.getSource().sendSuccess(() -> Component.literal("Daño a NPCs " + (enabled ? "activado" : "desactivado")), true);
+        return 1;
+    }
+
+    private static int npcDamageStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        boolean enabled = NpcSettingsStorage.get(player.serverLevel()).isNpcDamageEnabled();
+        context.getSource().sendSuccess(() -> Component.literal("Daño a NPCs: " + (enabled ? "ON" : "OFF")), false);
         return 1;
     }
 

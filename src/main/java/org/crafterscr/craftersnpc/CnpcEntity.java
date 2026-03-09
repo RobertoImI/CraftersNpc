@@ -10,6 +10,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -30,12 +31,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
@@ -59,6 +62,11 @@ public class CnpcEntity extends PathfinderMob {
     private List<RoutePoint> cachedRoute = List.of();
     private List<RouteStorage.RoutePoint> cachedStoredRouteSource = List.of();
 
+    private ReactionState reactionState = ReactionState.NONE;
+    private UUID reactivePlayerUuid;
+    private int reactiveTicks;
+    private int reactiveAttackCooldown;
+
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
     }
@@ -67,6 +75,7 @@ public class CnpcEntity extends PathfinderMob {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
             .add(Attributes.MOVEMENT_SPEED, 0.25D)
+            .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.FOLLOW_RANGE, 24.0D);
     }
 
@@ -92,14 +101,104 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(NPC_ID, "");
         builder.define(ROUTE_ID, "");
         builder.define(SLIM_MODEL, false);
+        builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
     }
 
     @Override
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
+            if (tickReaction()) {
+                return;
+            }
             tickRoute();
         }
+    }
+
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (!level().isClientSide && level() instanceof ServerLevel serverLevel && !NpcSettingsStorage.get(serverLevel).isNpcDamageEnabled()) {
+            return false;
+        }
+
+        boolean damaged = super.hurt(source, amount);
+        if (!damaged || level().isClientSide) {
+            return damaged;
+        }
+
+        if (source.getEntity() instanceof Player player && player.isAlive()) {
+            startReaction(player);
+        }
+        return true;
+    }
+
+    private boolean tickReaction() {
+        if (reactionState == ReactionState.NONE || reactiveTicks <= 0 || reactivePlayerUuid == null || !(level() instanceof ServerLevel serverLevel)) {
+            stopReaction();
+            return false;
+        }
+
+        Player player = serverLevel.getPlayerByUUID(reactivePlayerUuid);
+        if (player == null || !player.isAlive() || player.isSpectator()) {
+            stopReaction();
+            return false;
+        }
+
+        reactiveTicks--;
+        if (reactionState == ReactionState.ATTACKING) {
+            getLookControl().setLookAt(player, 30.0F, 30.0F);
+            getNavigation().moveTo(player, 1.15D);
+            if (reactiveAttackCooldown > 0) {
+                reactiveAttackCooldown--;
+            }
+            if (distanceToSqr(player) <= 4.0D && reactiveAttackCooldown <= 0) {
+                swing(InteractionHand.MAIN_HAND);
+                doHurtTarget(player);
+                reactiveAttackCooldown = 15;
+            }
+        } else if (reactionState == ReactionState.FLEEING) {
+            Vec3 away = position().subtract(player.position());
+            Vec3 horizontalAway = new Vec3(away.x, 0.0D, away.z);
+            if (horizontalAway.lengthSqr() <= 1.0E-4D) {
+                horizontalAway = new Vec3((random.nextDouble() - 0.5D) * 2.0D, 0.0D, (random.nextDouble() - 0.5D) * 2.0D);
+            }
+            Vec3 fleeTarget = position().add(horizontalAway.normalize().scale(6.0D));
+            getNavigation().moveTo(fleeTarget.x, position().y, fleeTarget.z, 1.2D);
+        }
+
+        if (reactiveTicks <= 0) {
+            stopReaction();
+            return false;
+        }
+        return true;
+    }
+
+    private void startReaction(Player player) {
+        Temperament temperament = getTemperament();
+        reactionState = switch (temperament) {
+            case AGRESIVO -> ReactionState.ATTACKING;
+            case ALEATORIO -> random.nextBoolean() ? ReactionState.ATTACKING : ReactionState.FLEEING;
+            case PACIFICO -> ReactionState.FLEEING;
+        };
+
+        reactivePlayerUuid = player.getUUID();
+        reactiveTicks = 20 * 6;
+        reactiveAttackCooldown = 0;
+        waitTicks = 0;
+        resetMovementTracking();
+        closeInteractingDoorIfAny();
+        getNavigation().stop();
+    }
+
+    private void stopReaction() {
+        if (reactionState == ReactionState.NONE && reactivePlayerUuid == null && reactiveTicks == 0) {
+            return;
+        }
+        reactionState = ReactionState.NONE;
+        reactivePlayerUuid = null;
+        reactiveTicks = 0;
+        reactiveAttackCooldown = 0;
+        reengageRouteNavigation();
     }
 
     private void tickRoute() {
@@ -541,6 +640,14 @@ public class CnpcEntity extends PathfinderMob {
         return entityData.get(SLIM_MODEL);
     }
 
+    public Temperament getTemperament() {
+        return Temperament.fromId(entityData.get(TEMPERAMENT));
+    }
+
+    public void setTemperament(Temperament temperament) {
+        entityData.set(TEMPERAMENT, temperament.id);
+    }
+
     public void setSlimModel(boolean slimModel) {
         entityData.set(SLIM_MODEL, slimModel);
     }
@@ -589,6 +696,9 @@ public class CnpcEntity extends PathfinderMob {
             + ", stuckTicks=" + stuckTicks
             + ", noProgressTicks=" + noProgressTicks
             + ", nightModeOnly=" + nightModeOnly
+            + ", temperament=" + getTemperament().id
+            + ", reaction=" + reactionState
+            + ", reactiveTicks=" + reactiveTicks
             + ", nightState=" + nightModeState
             + ", nightRefugeIndex=" + nightRefugeIndex
             + ", nightRefugeCount=" + nightRefugePoints.size()
@@ -665,6 +775,7 @@ public class CnpcEntity extends PathfinderMob {
         tag.putBoolean("SlimModel", isSlimModel());
         tag.putBoolean("RouteEnabled", routeEnabled);
         tag.putBoolean("NightModeOnly", nightModeOnly);
+        tag.putString("Temperament", getTemperament().id);
         tag.putInt("RouteIndex", routeIndex);
         tag.putBoolean("MovingForward", movingForward);
         tag.putInt("WaitTicks", waitTicks);
@@ -708,6 +819,7 @@ public class CnpcEntity extends PathfinderMob {
         setSlimModel(tag.getBoolean("SlimModel"));
         routeEnabled = tag.getBoolean("RouteEnabled");
         nightModeOnly = tag.getBoolean("NightModeOnly");
+        setTemperament(Temperament.fromId(tag.getString("Temperament")));
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
         waitTicks = normalizeWaitTicks(tag.getInt("WaitTicks"));
@@ -787,6 +899,34 @@ public class CnpcEntity extends PathfinderMob {
         GOING_TO_REFUGE,
         AT_REFUGE,
         RETURNING_TO_ROUTE
+    }
+
+    public enum Temperament {
+        PACIFICO("pacifico"),
+        AGRESIVO("agresivo"),
+        ALEATORIO("aleatorio");
+
+        private final String id;
+
+        Temperament(String id) {
+            this.id = id;
+        }
+
+        public static Temperament fromId(String value) {
+            String normalized = value == null ? "" : value.toLowerCase(Locale.ROOT);
+            for (Temperament temperament : values()) {
+                if (temperament.id.equals(normalized)) {
+                    return temperament;
+                }
+            }
+            return PACIFICO;
+        }
+    }
+
+    private enum ReactionState {
+        NONE,
+        ATTACKING,
+        FLEEING
     }
 
     private record RoutePoint(Vec3 pos, int waitTicks) {
