@@ -132,10 +132,11 @@ public final class CnpcCommands {
                                 .suggests(CnpcCommands::suggestRoutePoints)
                                 .then(Commands.argument("actionId", StringArgumentType.word())
                                     .suggests(CnpcCommands::suggestActions)
-                                    .executes(ctx -> setRoutePointAction(ctx, ""))
-                                    .then(Commands.argument("parameters", StringArgumentType.greedyString())
-                                        .suggests(CnpcCommands::suggestActionParameters)
-                                        .executes(ctx -> setRoutePointAction(ctx, StringArgumentType.getString(ctx, "parameters"))))))))
+                                    .then(Commands.argument("seconds", IntegerArgumentType.integer(0, 3600))
+                                        .executes(ctx -> setRoutePointAction(ctx, ""))
+                                        .then(Commands.argument("parameters", StringArgumentType.greedyString())
+                                            .suggests(CnpcCommands::suggestActionParameters)
+                                            .executes(ctx -> setRoutePointAction(ctx, StringArgumentType.getString(ctx, "parameters")))))))))
                     .then(Commands.literal("clear")
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestRoutes)
@@ -245,6 +246,7 @@ public final class CnpcCommands {
         String routeId = StringArgumentType.getString(context, "routeId").toLowerCase(Locale.ROOT);
         int point = IntegerArgumentType.getInteger(context, "point");
         String actionId = StringArgumentType.getString(context, "actionId").toLowerCase(Locale.ROOT);
+        int seconds = IntegerArgumentType.getInteger(context, "seconds");
         if (NpcActionRegistry.find(actionId).isEmpty()) {
             context.getSource().sendFailure(Component.literal("Acción desconocida: " + actionId + ". Disponibles: " + String.join(", ", NpcActionRegistry.ids())));
             return 0;
@@ -261,12 +263,8 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal("No existe el punto #" + point + " en la ruta " + routeId));
             return 0;
         }
-        boolean addedDefaultWait = storage.getRoute(routeId).get(point - 1).waitTicks() == 0;
-        if (addedDefaultWait) {
-            storage.setPointWait(routeId, point - 1, 5 * 20);
-        }
-        String waitMessage = addedDefaultWait ? " (espera automática: 5s)" : "";
-        context.getSource().sendSuccess(() -> Component.literal("Acción " + actionId + " asignada al punto #" + point + " de " + routeId + waitMessage), true);
+        storage.setPointWait(routeId, point - 1, seconds * 20);
+        context.getSource().sendSuccess(() -> Component.literal("Acción " + actionId + " asignada al punto #" + point + " de " + routeId + " durante " + seconds + "s"), true);
         return 1;
     }
 

@@ -36,6 +36,18 @@ public final class ActionParameters {
         }
     }
 
+    public static boolean bool(Map<String, String> parameters, String key, boolean fallback) {
+        String value = parameters.get(key);
+        if (value == null) {
+            return fallback;
+        }
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "true", "yes", "on", "1", "si", "sí" -> true;
+            case "false", "no", "off", "0" -> false;
+            default -> fallback;
+        };
+    }
+
     public static int integer(Map<String, String> parameters, String key, int fallback) {
         try {
             return Integer.parseInt(parameters.getOrDefault(key, Integer.toString(fallback)));
