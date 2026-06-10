@@ -8,6 +8,11 @@ import java.util.Map;
 
 public final class SitAction implements NpcAction {
     @Override
+    public String description() {
+        return "Se sienta durante toda la espera del punto";
+    }
+
+    @Override
     public void start(CnpcEntity npc, Map<String, String> parameters) {
         npc.setPose(Pose.SITTING);
     }

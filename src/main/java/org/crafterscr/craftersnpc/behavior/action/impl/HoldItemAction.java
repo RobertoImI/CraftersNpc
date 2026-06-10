@@ -11,8 +11,18 @@ import java.util.Map;
 
 public final class HoldItemAction implements NpcAction {
     @Override
+    public String description() {
+        return "Saca y sostiene un objeto durante la espera del punto";
+    }
+
+    @Override
+    public java.util.List<String> parameterSuggestions() {
+        return java.util.List.of("item=minecraft:apple", "item=minecraft:diamond", "item=minecraft:iron_sword");
+    }
+
+    @Override
     public void start(CnpcEntity npc, Map<String, String> parameters) {
-        ResourceLocation id = ResourceLocation.tryParse(parameters.getOrDefault("item", "minecraft:air"));
+        ResourceLocation id = ResourceLocation.tryParse(parameters.getOrDefault("item", "minecraft:apple"));
         if (id != null && BuiltInRegistries.ITEM.containsKey(id)) {
             npc.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(BuiltInRegistries.ITEM.get(id)));
         }

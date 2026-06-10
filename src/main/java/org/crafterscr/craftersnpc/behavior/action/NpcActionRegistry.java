@@ -1,7 +1,9 @@
 package org.crafterscr.craftersnpc.behavior.action;
 
+import org.crafterscr.craftersnpc.behavior.action.impl.EatAction;
 import org.crafterscr.craftersnpc.behavior.action.impl.HoldItemAction;
 import org.crafterscr.craftersnpc.behavior.action.impl.LookAction;
+import org.crafterscr.craftersnpc.behavior.action.impl.LookAroundAction;
 import org.crafterscr.craftersnpc.behavior.action.impl.PlaySoundAction;
 import org.crafterscr.craftersnpc.behavior.action.impl.SayAction;
 import org.crafterscr.craftersnpc.behavior.action.impl.SitAction;
@@ -19,8 +21,10 @@ public final class NpcActionRegistry {
 
     static {
         register("look", new LookAction());
+        register("look_around", new LookAroundAction());
         register("say", new SayAction());
         register("hold_item", new HoldItemAction());
+        register("eat", new EatAction());
         register("sit", new SitAction());
         register("work", new WorkAction());
         register("play_sound", new PlaySoundAction());

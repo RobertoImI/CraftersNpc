@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc;
 
 import org.crafterscr.craftersnpc.behavior.action.ActionParameters;
+import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
 
 import com.mojang.brigadier.CommandDispatcher;
@@ -128,16 +129,26 @@ public final class CnpcCommands {
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                             .then(Commands.argument("point", IntegerArgumentType.integer(1))
+                                .suggests(CnpcCommands::suggestRoutePoints)
                                 .then(Commands.argument("actionId", StringArgumentType.word())
-                                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(NpcActionRegistry.ids(), builder))
+                                    .suggests(CnpcCommands::suggestActions)
                                     .executes(ctx -> setRoutePointAction(ctx, ""))
                                     .then(Commands.argument("parameters", StringArgumentType.greedyString())
+                                        .suggests(CnpcCommands::suggestActionParameters)
                                         .executes(ctx -> setRoutePointAction(ctx, StringArgumentType.getString(ctx, "parameters"))))))))
                     .then(Commands.literal("clear")
                         .then(Commands.argument("routeId", StringArgumentType.word())
-                            .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
+                            .suggests(CnpcCommands::suggestRoutes)
                             .then(Commands.argument("point", IntegerArgumentType.integer(1))
+                                .suggests(CnpcCommands::suggestRoutePoints)
                                 .executes(CnpcCommands::clearRoutePointAction)))))
+                .then(Commands.literal("wait")
+                    .then(Commands.argument("routeId", StringArgumentType.word())
+                        .suggests(CnpcCommands::suggestRoutes)
+                        .then(Commands.argument("point", IntegerArgumentType.integer(1))
+                            .suggests(CnpcCommands::suggestRoutePoints)
+                            .then(Commands.argument("seconds", IntegerArgumentType.integer(0, 3600))
+                                .executes(CnpcCommands::setRoutePointWait)))))
                 .then(Commands.literal("list")
                     .executes(CnpcCommands::listRoutes))
                 .then(Commands.literal("preview")
@@ -213,7 +224,9 @@ public final class CnpcCommands {
     private static int listRoutes(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         RouteStorage storage = RouteStorage.get(player.serverLevel());
-        String ids = storage.routeIds().stream().sorted().reduce((a, b) -> a + ", " + b).orElse("(sin rutas)");
+        String ids = storage.routeIds().stream().sorted()
+            .map(routeId -> routeId + " (" + storage.getRoute(routeId).size() + " puntos)")
+            .reduce((a, b) -> a + ", " + b).orElse("(sin rutas)");
         context.getSource().sendSuccess(() -> Component.literal("Rutas: " + ids), false);
         return 1;
     }
@@ -243,11 +256,30 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal(exception.getMessage()));
             return 0;
         }
-        if (!RouteStorage.get(player.serverLevel()).setPointAction(routeId, point - 1, actionId, parameters)) {
+        RouteStorage storage = RouteStorage.get(player.serverLevel());
+        if (!storage.setPointAction(routeId, point - 1, actionId, parameters)) {
             context.getSource().sendFailure(Component.literal("No existe el punto #" + point + " en la ruta " + routeId));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.literal("Acción " + actionId + " asignada al punto #" + point + " de " + routeId), true);
+        boolean addedDefaultWait = storage.getRoute(routeId).get(point - 1).waitTicks() == 0;
+        if (addedDefaultWait) {
+            storage.setPointWait(routeId, point - 1, 5 * 20);
+        }
+        String waitMessage = addedDefaultWait ? " (espera automática: 5s)" : "";
+        context.getSource().sendSuccess(() -> Component.literal("Acción " + actionId + " asignada al punto #" + point + " de " + routeId + waitMessage), true);
+        return 1;
+    }
+
+    private static int setRoutePointWait(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String routeId = StringArgumentType.getString(context, "routeId");
+        int point = IntegerArgumentType.getInteger(context, "point");
+        int seconds = IntegerArgumentType.getInteger(context, "seconds");
+        if (!RouteStorage.get(player.serverLevel()).setPointWait(routeId, point - 1, seconds * 20)) {
+            context.getSource().sendFailure(Component.literal("No existe el punto #" + point + " en la ruta " + routeId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("El punto #" + point + " de " + routeId + " esperará " + seconds + "s"), true);
         return 1;
     }
 
@@ -458,6 +490,37 @@ public final class CnpcCommands {
         return 1;
     }
 
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestActions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        NpcActionRegistry.ids().forEach(id -> NpcActionRegistry.find(id).ifPresent(action -> builder.suggest(id, Component.literal(action.description()))));
+        return builder.buildFuture();
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestActionParameters(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        String actionId = StringArgumentType.getString(context, "actionId");
+        return NpcActionRegistry.find(actionId)
+            .map(NpcAction::parameterSuggestions)
+            .map(suggestions -> SharedSuggestionProvider.suggest(suggestions, builder))
+            .orElseGet(builder::buildFuture);
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestRoutePoints(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            String routeId = StringArgumentType.getString(context, "routeId");
+            List<RouteStorage.RoutePoint> points = RouteStorage.get(player.serverLevel()).getRoute(routeId);
+            for (int index = 0; index < points.size(); index++) {
+                RouteStorage.RoutePoint point = points.get(index);
+                String action = point.actionId().isBlank() ? "sin acción" : point.actionId();
+                String details = (point.waitTicks() / 20) + "s, " + action + ", "
+                    + (int) point.x() + " " + (int) point.y() + " " + (int) point.z();
+                builder.suggest(Integer.toString(index + 1), Component.literal(details));
+            }
+            return builder.buildFuture();
+        } catch (CommandSyntaxException | IllegalArgumentException ignored) {
+            return builder.buildFuture();
+        }
+    }
+
     private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestSkins(SuggestionsBuilder builder) {
         return SharedSuggestionProvider.suggest(SkinDirectory.listSkins(), builder);
     }
@@ -465,7 +528,12 @@ public final class CnpcCommands {
     private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestRoutes(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         try {
             ServerPlayer player = context.getSource().getPlayerOrException();
-            return SharedSuggestionProvider.suggest(RouteStorage.get(player.serverLevel()).routeIds(), builder);
+            RouteStorage storage = RouteStorage.get(player.serverLevel());
+            storage.routeIds().stream().sorted().forEach(routeId -> {
+                int count = storage.getRoute(routeId).size();
+                builder.suggest(routeId, Component.literal(count + (count == 1 ? " punto" : " puntos")));
+            });
+            return builder.buildFuture();
         } catch (CommandSyntaxException e) {
             return CompletableFuture.completedFuture(builder.build());
         }

@@ -54,6 +54,20 @@ public class RouteStorage extends SavedData {
         return routes.containsKey(normalizeRouteId(routeId));
     }
 
+    public boolean setPointWait(String routeId, int pointIndex, int waitTicks) {
+        String normalizedRouteId = normalizeRouteId(routeId);
+        List<RoutePoint> points = routes.get(normalizedRouteId);
+        if (points == null || pointIndex < 0 || pointIndex >= points.size()) {
+            return false;
+        }
+        List<RoutePoint> updated = new ArrayList<>(points);
+        RoutePoint point = updated.get(pointIndex);
+        updated.set(pointIndex, new RoutePoint(point.x(), point.y(), point.z(), Mth.clamp(waitTicks, 0, 3600 * 20), point.actionId(), point.actionParameters()));
+        routes.put(normalizedRouteId, List.copyOf(updated));
+        setDirty();
+        return true;
+    }
+
     public boolean setPointAction(String routeId, int pointIndex, String actionId, Map<String, String> parameters) {
         String normalizedRouteId = normalizeRouteId(routeId);
         List<RoutePoint> points = routes.get(normalizedRouteId);
