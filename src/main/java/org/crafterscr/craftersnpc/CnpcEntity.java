@@ -32,6 +32,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,6 +50,7 @@ public class CnpcEntity extends PathfinderMob {
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
+    private final List<NpcScheduleEntry> schedule = new ArrayList<>();
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -62,6 +64,7 @@ public class CnpcEntity extends PathfinderMob {
     private NpcAction activeRouteAction;
     private Map<String, String> activeRouteActionParameters = Map.of();
     private int activeRouteActionTicks;
+    private String activeScheduleRouteId = "";
 
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
@@ -215,6 +218,7 @@ public class CnpcEntity extends PathfinderMob {
 
     private void tickRoute() {
         tickDoorInteraction();
+        updateScheduledRoute();
 
         if (!routeEnabled) {
             resetMovementTracking();
@@ -230,7 +234,7 @@ public class CnpcEntity extends PathfinderMob {
             closeInteractingDoorIfAny();
             getNavigation().stop();
 
-            if (!getAssignedRouteId().isBlank()) {
+            if (schedule.isEmpty() && !getAssignedRouteId().isBlank()) {
                 routeEnabled = false;
                 CraftersNpc.LOGGER.debug("Desactivando ruta vacía para NPC {} (RouteId={})", getNpcId(), getAssignedRouteId());
             }
@@ -539,9 +543,47 @@ public class CnpcEntity extends PathfinderMob {
         activeRouteActionTicks = 0;
     }
 
+    private void updateScheduledRoute() {
+        if (schedule.isEmpty()) {
+            if (!activeScheduleRouteId.isEmpty()) {
+                switchEffectiveRoute("");
+            }
+            return;
+        }
+
+        int dayTime = (int) Math.floorMod(level().getDayTime(), NpcScheduleEntry.DAY_TICKS);
+        String scheduledRouteId = schedule.stream()
+            .filter(entry -> entry.contains(dayTime))
+            .map(NpcScheduleEntry::routeId)
+            .findFirst()
+            .orElse("");
+        if (!scheduledRouteId.equals(activeScheduleRouteId)) {
+            switchEffectiveRoute(scheduledRouteId);
+        }
+    }
+
+    private void switchEffectiveRoute(String scheduledRouteId) {
+        finishCurrentAction();
+        activeScheduleRouteId = scheduledRouteId;
+        cachedRoute = List.of();
+        cachedStoredRouteSource = List.of();
+        routeIndex = 0;
+        movingForward = true;
+        waitTicks = 0;
+        resetMovementTracking();
+        resetNightState();
+        closeInteractingDoorIfAny();
+        getNavigation().stop();
+    }
+
+    private String effectiveRouteId() {
+        return schedule.isEmpty() ? getAssignedRouteId() : activeScheduleRouteId;
+    }
+
     private List<RoutePoint> currentRoute() {
-        if (level() instanceof ServerLevel serverLevel && !getAssignedRouteId().isBlank()) {
-            List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(getAssignedRouteId());
+        String routeId = effectiveRouteId();
+        if (level() instanceof ServerLevel serverLevel && !routeId.isBlank()) {
+            List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(routeId);
             if (!stored.isEmpty()) {
                 if (stored != cachedStoredRouteSource) {
                     cachedStoredRouteSource = stored;
@@ -554,7 +596,7 @@ public class CnpcEntity extends PathfinderMob {
         }
         cachedStoredRouteSource = List.of();
         cachedRoute = List.of();
-        return route;
+        return schedule.isEmpty() ? route : List.of();
     }
 
     private static int normalizeWaitTicks(int rawWait) {
@@ -619,6 +661,43 @@ public class CnpcEntity extends PathfinderMob {
             summary.add("#" + i + " (" + Mth.floor(point.pos().x) + "," + Mth.floor(point.pos().y) + "," + Mth.floor(point.pos().z) + ") wait=" + (point.waitTicks() / 20) + "s");
         }
         return summary;
+    }
+
+    public List<NpcScheduleEntry> getSchedule() {
+        return List.copyOf(schedule);
+    }
+
+    public void setScheduleEntry(NpcScheduleEntry entry) {
+        for (NpcScheduleEntry existing : schedule) {
+            boolean sameInterval = existing.startTime() == entry.startTime() && existing.endTime() == entry.endTime();
+            if (!sameInterval && existing.overlaps(entry)) {
+                throw new IllegalArgumentException("La franja se superpone con " + existing.startTime() + "-" + existing.endTime() + ".");
+            }
+        }
+        schedule.removeIf(existing -> existing.startTime() == entry.startTime() && existing.endTime() == entry.endTime());
+        schedule.add(entry);
+        schedule.sort(Comparator.comparingInt(NpcScheduleEntry::startTime));
+        routeEnabled = true;
+        switchEffectiveRoute("");
+    }
+
+    public boolean removeScheduleEntry(int index) {
+        if (index < 0 || index >= schedule.size()) {
+            return false;
+        }
+        schedule.remove(index);
+        switchEffectiveRoute("");
+        return true;
+    }
+
+    public int removeScheduleEntriesForRoute(String routeId) {
+        int previousSize = schedule.size();
+        schedule.removeIf(entry -> entry.routeId().equalsIgnoreCase(routeId));
+        int removed = previousSize - schedule.size();
+        if (removed > 0) {
+            switchEffectiveRoute("");
+        }
+        return removed;
     }
 
     public void clearRoute() {
@@ -751,6 +830,8 @@ public class CnpcEntity extends PathfinderMob {
         String target = points.isEmpty() ? "none" : formatVec3(currentTargetPos(points));
         return "routeEnabled=" + routeEnabled
             + ", routeId=" + getAssignedRouteId()
+            + ", effectiveRouteId=" + effectiveRouteId()
+            + ", scheduleEntries=" + schedule.size()
             + ", routePoints=" + points.size()
             + ", routeIndex=" + routeIndex
             + ", movingForward=" + movingForward
@@ -850,6 +931,12 @@ public class CnpcEntity extends PathfinderMob {
         tag.putInt("NightRefugeIndex", nightRefugeIndex);
         tag.putInt("NightReturnRouteIndex", nightReturnRouteIndex);
 
+        ListTag scheduleTag = new ListTag();
+        for (NpcScheduleEntry entry : schedule) {
+            scheduleTag.add(entry.save());
+        }
+        tag.put("Schedule", scheduleTag);
+
         ListTag points = new ListTag();
         for (RoutePoint point : route) {
             CompoundTag p = new CompoundTag();
@@ -897,6 +984,21 @@ public class CnpcEntity extends PathfinderMob {
         nightModeState = nightStateIndex >= 0 && nightStateIndex < NightModeState.values().length ? NightModeState.values()[nightStateIndex] : NightModeState.NONE;
         nightRefugeIndex = tag.getInt("NightRefugeIndex");
         nightReturnRouteIndex = tag.getInt("NightReturnRouteIndex");
+
+        schedule.clear();
+        activeScheduleRouteId = "";
+        ListTag scheduleTag = tag.getList("Schedule", Tag.TAG_COMPOUND);
+        for (Tag value : scheduleTag) {
+            NpcScheduleEntry.load((CompoundTag) value).ifPresent(entry -> {
+                if (schedule.stream().noneMatch(existing -> existing.overlaps(entry))) {
+                    schedule.add(entry);
+                }
+            });
+        }
+        schedule.sort(Comparator.comparingInt(NpcScheduleEntry::startTime));
+        if (!schedule.isEmpty()) {
+            routeEnabled = true;
+        }
 
         route.clear();
         ListTag points = tag.getList("Route", Tag.TAG_COMPOUND);

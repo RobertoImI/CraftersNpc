@@ -62,6 +62,25 @@ public final class CnpcCommands {
                         .then(Commands.argument("routeId", StringArgumentType.word())
                             .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                             .executes(ctx -> assignRoute(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "routeId"))))))
+                .then(Commands.literal("schedule")
+                    .then(Commands.literal("assign")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("startTime", IntegerArgumentType.integer(0, NpcScheduleEntry.DAY_TICKS - 1))
+                                .then(Commands.argument("endTime", IntegerArgumentType.integer(0, NpcScheduleEntry.DAY_TICKS - 1))
+                                    .then(Commands.argument("routeId", StringArgumentType.word())
+                                        .suggests(CnpcCommands::suggestRoutes)
+                                        .executes(CnpcCommands::assignScheduleEntry))))))
+                    .then(Commands.literal("list")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(CnpcCommands::listSchedule)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("entry", IntegerArgumentType.integer(1))
+                                .suggests(CnpcCommands::suggestScheduleEntries)
+                                .executes(CnpcCommands::removeScheduleEntry)))))
                 .then(Commands.literal("temperament")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -305,10 +324,18 @@ public final class CnpcCommands {
         int affectedNpcs = 0;
         for (ServerLevel serverLevel : player.getServer().getAllLevels()) {
             for (Entity entity : serverLevel.getAllEntities()) {
-                if (entity instanceof CnpcEntity npc && npc.getAssignedRouteId().equalsIgnoreCase(normalizedRouteId)) {
-                    npc.setAssignedRouteId("");
-                    npc.setRouteEnabled(false);
-                    affectedNpcs++;
+                if (entity instanceof CnpcEntity npc) {
+                    boolean assigned = npc.getAssignedRouteId().equalsIgnoreCase(normalizedRouteId);
+                    int removedScheduleEntries = npc.removeScheduleEntriesForRoute(normalizedRouteId);
+                    if (assigned) {
+                        npc.setAssignedRouteId("");
+                        if (npc.getSchedule().isEmpty()) {
+                            npc.setRouteEnabled(false);
+                        }
+                    }
+                    if (assigned || removedScheduleEntries > 0) {
+                        affectedNpcs++;
+                    }
                 }
             }
         }
@@ -335,6 +362,79 @@ public final class CnpcCommands {
         npc.get().setRouteEnabled(true);
         context.getSource().sendSuccess(() -> Component.literal("Ruta " + normalizedRouteId + " asignada a NPC " + npcId), true);
         return 1;
+    }
+
+    private static int assignScheduleEntry(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String npcId = StringArgumentType.getString(context, "npcId");
+        String routeId = StringArgumentType.getString(context, "routeId").toLowerCase(Locale.ROOT);
+        if (!RouteStorage.get(player.serverLevel()).hasRoute(routeId)) {
+            context.getSource().sendFailure(Component.literal("No existe ruta: " + routeId));
+            return 0;
+        }
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+
+        try {
+            NpcScheduleEntry entry = new NpcScheduleEntry(
+                IntegerArgumentType.getInteger(context, "startTime"),
+                IntegerArgumentType.getInteger(context, "endTime"),
+                routeId
+            );
+            npc.get().setScheduleEntry(entry);
+            context.getSource().sendSuccess(() -> Component.literal("Horario de " + npcId + " asignado: " + formatScheduleEntry(entry)), true);
+            return 1;
+        } catch (IllegalArgumentException exception) {
+            context.getSource().sendFailure(Component.literal(exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int listSchedule(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String npcId = StringArgumentType.getString(context, "npcId");
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<NpcScheduleEntry> schedule = npc.get().getSchedule();
+        if (schedule.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("Horario de " + npcId + ": (sin entradas; usa la ruta manual asignada)"), false);
+            return 1;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Horario de " + npcId + ":"), false);
+        for (int index = 0; index < schedule.size(); index++) {
+            int entryNumber = index + 1;
+            NpcScheduleEntry entry = schedule.get(index);
+            context.getSource().sendSuccess(() -> Component.literal("#" + entryNumber + " " + formatScheduleEntry(entry)), false);
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Fuera de estas franjas el NPC se detiene; la hora final es exclusiva."), false);
+        return schedule.size();
+    }
+
+    private static int removeScheduleEntry(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String npcId = StringArgumentType.getString(context, "npcId");
+        int entry = IntegerArgumentType.getInteger(context, "entry");
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!npc.get().removeScheduleEntry(entry - 1)) {
+            context.getSource().sendFailure(Component.literal("No existe la entrada #" + entry + " en el horario de " + npcId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Entrada #" + entry + " eliminada del horario de " + npcId), true);
+        return 1;
+    }
+
+    private static String formatScheduleEntry(NpcScheduleEntry entry) {
+        return entry.startTime() + "-" + entry.endTime() + " -> " + entry.routeId();
     }
 
     private static int setNightMode(CommandContext<CommandSourceStack> context, String npcId, boolean enabled) throws CommandSyntaxException {
@@ -515,6 +615,22 @@ public final class CnpcCommands {
             }
             return builder.buildFuture();
         } catch (CommandSyntaxException | IllegalArgumentException ignored) {
+            return builder.buildFuture();
+        }
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestScheduleEntries(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            String npcId = StringArgumentType.getString(context, "npcId");
+            NpcRegistry.findById(player.getServer(), npcId).ifPresent(npc -> {
+                List<NpcScheduleEntry> schedule = npc.getSchedule();
+                for (int index = 0; index < schedule.size(); index++) {
+                    builder.suggest(Integer.toString(index + 1), Component.literal(formatScheduleEntry(schedule.get(index))));
+                }
+            });
+            return builder.buildFuture();
+        } catch (CommandSyntaxException ignored) {
             return builder.buildFuture();
         }
     }
