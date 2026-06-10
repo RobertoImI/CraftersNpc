@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,7 +30,7 @@ public class RouteStorage extends SavedData {
         String normalizedRouteId = normalizeRouteId(routeId);
         List<RoutePoint> sanitizedPoints = points.stream()
             .filter(RouteStorage::isFinite)
-            .map(point -> new RoutePoint(point.x(), point.y(), point.z(), Mth.clamp(point.waitTicks(), 0, 3600 * 20)))
+            .map(point -> new RoutePoint(point.x(), point.y(), point.z(), Mth.clamp(point.waitTicks(), 0, 3600 * 20), point.actionId(), point.actionParameters()))
             .toList();
         routes.put(normalizedRouteId, sanitizedPoints);
         setDirty();
@@ -53,6 +54,20 @@ public class RouteStorage extends SavedData {
         return routes.containsKey(normalizeRouteId(routeId));
     }
 
+    public boolean setPointAction(String routeId, int pointIndex, String actionId, Map<String, String> parameters) {
+        String normalizedRouteId = normalizeRouteId(routeId);
+        List<RoutePoint> points = routes.get(normalizedRouteId);
+        if (points == null || pointIndex < 0 || pointIndex >= points.size()) {
+            return false;
+        }
+        List<RoutePoint> updated = new ArrayList<>(points);
+        RoutePoint point = updated.get(pointIndex);
+        updated.set(pointIndex, new RoutePoint(point.x(), point.y(), point.z(), point.waitTicks(), actionId, parameters));
+        routes.put(normalizedRouteId, List.copyOf(updated));
+        setDirty();
+        return true;
+    }
+
     public boolean removeRoute(String routeId) {
         String normalized = normalizeRouteId(routeId);
         if (routes.remove(normalized) != null) {
@@ -70,7 +85,7 @@ public class RouteStorage extends SavedData {
             List<RoutePoint> routePoints = new ArrayList<>();
             for (Tag pointTag : points) {
                 CompoundTag point = (CompoundTag) pointTag;
-                routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), decodeWaitTicks(point)));
+                routePoints.add(new RoutePoint(point.getDouble("X"), point.getDouble("Y"), point.getDouble("Z"), decodeWaitTicks(point), point.getString("Action"), readActionParameters(point)));
             }
             storage.routes.put(key.toLowerCase(Locale.ROOT), routePoints);
         }
@@ -89,6 +104,7 @@ public class RouteStorage extends SavedData {
                 pointTag.putDouble("Z", point.z());
                 pointTag.putInt("Wait", point.waitTicks());
                 pointTag.putBoolean("WaitIsTicks", true);
+                writeAction(pointTag, point.actionId(), point.actionParameters());
                 points.add(pointTag);
             }
             routesTag.put(key, points);
@@ -105,6 +121,44 @@ public class RouteStorage extends SavedData {
         return Mth.clamp(rawWait, 0, 3600) * 20;
     }
 
+    public static void writeAction(CompoundTag tag, String actionId, Map<String, String> parameters) {
+        if (actionId != null && !actionId.isBlank()) {
+            tag.putString("Action", actionId);
+        }
+        if (parameters != null && !parameters.isEmpty()) {
+            CompoundTag parametersTag = new CompoundTag();
+            parameters.forEach(parametersTag::putString);
+            tag.put("ActionParameters", parametersTag);
+        }
+    }
+
+    public static Map<String, String> readActionParameters(CompoundTag point) {
+        if (!point.contains("ActionParameters", Tag.TAG_COMPOUND)) {
+            return Map.of();
+        }
+        CompoundTag parametersTag = point.getCompound("ActionParameters");
+        Map<String, String> parameters = new LinkedHashMap<>();
+        for (String key : parametersTag.getAllKeys()) {
+            if (parametersTag.contains(key, Tag.TAG_STRING)) {
+                parameters.put(key, parametersTag.getString(key));
+            }
+        }
+        return Map.copyOf(parameters);
+    }
+
+    private static Map<String, String> sanitizeActionParameters(Map<String, String> parameters) {
+        if (parameters == null || parameters.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> sanitized = new LinkedHashMap<>();
+        parameters.forEach((key, value) -> {
+            if (key != null && value != null && !key.isBlank()) {
+                sanitized.put(key.trim().toLowerCase(Locale.ROOT), value);
+            }
+        });
+        return Map.copyOf(sanitized);
+    }
+
     private static boolean isFinite(RoutePoint point) {
         return Double.isFinite(point.x()) && Double.isFinite(point.y()) && Double.isFinite(point.z());
     }
@@ -113,6 +167,14 @@ public class RouteStorage extends SavedData {
         return routeId == null ? "" : routeId.toLowerCase(Locale.ROOT);
     }
 
-    public record RoutePoint(double x, double y, double z, int waitTicks) {
+    public record RoutePoint(double x, double y, double z, int waitTicks, String actionId, Map<String, String> actionParameters) {
+        public RoutePoint(double x, double y, double z, int waitTicks) {
+            this(x, y, z, waitTicks, "", Map.of());
+        }
+
+        public RoutePoint {
+            actionId = actionId == null ? "" : actionId.trim().toLowerCase(Locale.ROOT);
+            actionParameters = sanitizeActionParameters(actionParameters);
+        }
     }
 }

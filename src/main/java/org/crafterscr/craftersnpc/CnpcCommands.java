@@ -1,5 +1,8 @@
 package org.crafterscr.craftersnpc;
 
+import org.crafterscr.craftersnpc.behavior.action.ActionParameters;
+import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -23,6 +26,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -119,6 +123,21 @@ public final class CnpcCommands {
                     .then(Commands.argument("routeId", StringArgumentType.word())
                         .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
                         .executes(ctx -> removeRoute(ctx, StringArgumentType.getString(ctx, "routeId")))))
+                .then(Commands.literal("action")
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("routeId", StringArgumentType.word())
+                            .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
+                            .then(Commands.argument("point", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("actionId", StringArgumentType.word())
+                                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(NpcActionRegistry.ids(), builder))
+                                    .executes(ctx -> setRoutePointAction(ctx, ""))
+                                    .then(Commands.argument("parameters", StringArgumentType.greedyString())
+                                        .executes(ctx -> setRoutePointAction(ctx, StringArgumentType.getString(ctx, "parameters"))))))))
+                    .then(Commands.literal("clear")
+                        .then(Commands.argument("routeId", StringArgumentType.word())
+                            .suggests((ctx, builder) -> suggestRoutes(ctx, builder))
+                            .then(Commands.argument("point", IntegerArgumentType.integer(1))
+                                .executes(CnpcCommands::clearRoutePointAction)))))
                 .then(Commands.literal("list")
                     .executes(CnpcCommands::listRoutes))
                 .then(Commands.literal("preview")
@@ -205,6 +224,42 @@ public final class CnpcCommands {
         context.getSource().sendSuccess(() -> Component.literal(enabled
             ? "Visualización de todas las rutas activada (solo visible con wand en mano)."
             : "Visualización de todas las rutas desactivada."), false);
+        return 1;
+    }
+
+    private static int setRoutePointAction(CommandContext<CommandSourceStack> context, String rawParameters) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String routeId = StringArgumentType.getString(context, "routeId").toLowerCase(Locale.ROOT);
+        int point = IntegerArgumentType.getInteger(context, "point");
+        String actionId = StringArgumentType.getString(context, "actionId").toLowerCase(Locale.ROOT);
+        if (NpcActionRegistry.find(actionId).isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Acción desconocida: " + actionId + ". Disponibles: " + String.join(", ", NpcActionRegistry.ids())));
+            return 0;
+        }
+        final Map<String, String> parameters;
+        try {
+            parameters = ActionParameters.parse(rawParameters);
+        } catch (IllegalArgumentException exception) {
+            context.getSource().sendFailure(Component.literal(exception.getMessage()));
+            return 0;
+        }
+        if (!RouteStorage.get(player.serverLevel()).setPointAction(routeId, point - 1, actionId, parameters)) {
+            context.getSource().sendFailure(Component.literal("No existe el punto #" + point + " en la ruta " + routeId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Acción " + actionId + " asignada al punto #" + point + " de " + routeId), true);
+        return 1;
+    }
+
+    private static int clearRoutePointAction(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String routeId = StringArgumentType.getString(context, "routeId").toLowerCase(Locale.ROOT);
+        int point = IntegerArgumentType.getInteger(context, "point");
+        if (!RouteStorage.get(player.serverLevel()).setPointAction(routeId, point - 1, "", Map.of())) {
+            context.getSource().sendFailure(Component.literal("No existe el punto #" + point + " en la ruta " + routeId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Acción eliminada del punto #" + point + " de " + routeId), true);
         return 1;
     }
 

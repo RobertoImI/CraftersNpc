@@ -1,5 +1,8 @@
 package org.crafterscr.craftersnpc;
 
+import org.crafterscr.craftersnpc.behavior.action.NpcAction;
+import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -31,6 +34,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
@@ -55,6 +59,9 @@ public class CnpcEntity extends PathfinderMob {
     private int stuckTicks;
     private Vec3 lastProgressPos = Vec3.ZERO;
     private int noProgressTicks;
+    private NpcAction activeRouteAction;
+    private Map<String, String> activeRouteActionParameters = Map.of();
+    private int activeRouteActionTicks;
 
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
@@ -188,6 +195,7 @@ public class CnpcEntity extends PathfinderMob {
         reactivePlayerUuid = player.getUUID();
         reactiveTicks = 20 * 8;
         reactiveAttackCooldown = 0;
+        finishCurrentAction();
         waitTicks = 0;
         resetMovementTracking();
         closeInteractingDoorIfAny();
@@ -215,6 +223,7 @@ public class CnpcEntity extends PathfinderMob {
 
         List<RoutePoint> points = currentRoute();
         if (points.isEmpty()) {
+            finishCurrentAction();
             resetMovementTracking();
             waitTicks = 0;
             resetNightState();
@@ -235,6 +244,8 @@ public class CnpcEntity extends PathfinderMob {
 
 
         if (waitTicks > 0) {
+            beginCurrentAction(points);
+            tickCurrentAction();
             waitTicks--;
             getNavigation().stop();
             resetMovementTracking();
@@ -255,6 +266,7 @@ public class CnpcEntity extends PathfinderMob {
         if (reachedPoint) {
             getNavigation().stop();
             waitTicks = currentWaitTicks(points);
+            beginCurrentAction(points);
             resetMovementTracking();
             lastProgressPos = position();
             if (waitTicks <= 0) {
@@ -303,6 +315,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private void recoverFromStall(List<RoutePoint> baseRoute) {
+        finishCurrentAction();
         waitTicks = 0;
         resetMovementTracking();
 
@@ -410,12 +423,14 @@ public class CnpcEntity extends PathfinderMob {
 
         if (level().isNight()) {
             if (nightModeState == NightModeState.NONE) {
+                finishCurrentAction();
                 startNightRefugeDetour();
             }
             return;
         }
 
         if (nightModeState == NightModeState.GOING_TO_REFUGE || nightModeState == NightModeState.AT_REFUGE) {
+            finishCurrentAction();
             nightModeState = NightModeState.RETURNING_TO_ROUTE;
             nightReturnRouteIndex = Mth.clamp(nightReturnRouteIndex, 0, baseRoute.size() - 1);
             waitTicks = 0;
@@ -474,6 +489,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private void advanceAfterReached(List<RoutePoint> baseRoute) {
+        finishCurrentAction();
         if (nightModeState == NightModeState.GOING_TO_REFUGE) {
             nightModeState = NightModeState.AT_REFUGE;
             return;
@@ -494,6 +510,35 @@ public class CnpcEntity extends PathfinderMob {
         advanceIndex(baseRoute);
     }
 
+    private void beginCurrentAction(List<RoutePoint> baseRoute) {
+        if (activeRouteAction != null || nightModeState != NightModeState.NONE || routeIndex < 0 || routeIndex >= baseRoute.size()) {
+            return;
+        }
+        RoutePoint point = baseRoute.get(routeIndex);
+        NpcActionRegistry.find(point.actionId()).ifPresent(action -> {
+            activeRouteAction = action;
+            activeRouteActionParameters = point.actionParameters();
+            activeRouteActionTicks = 0;
+            action.start(this, activeRouteActionParameters);
+        });
+    }
+
+    private void tickCurrentAction() {
+        if (activeRouteAction != null) {
+            activeRouteAction.tick(this, activeRouteActionParameters, activeRouteActionTicks++);
+        }
+    }
+
+    private void finishCurrentAction() {
+        if (activeRouteAction == null) {
+            return;
+        }
+        activeRouteAction.finish(this, activeRouteActionParameters);
+        activeRouteAction = null;
+        activeRouteActionParameters = Map.of();
+        activeRouteActionTicks = 0;
+    }
+
     private List<RoutePoint> currentRoute() {
         if (level() instanceof ServerLevel serverLevel && !getAssignedRouteId().isBlank()) {
             List<RouteStorage.RoutePoint> stored = RouteStorage.get(serverLevel).getRoute(getAssignedRouteId());
@@ -501,7 +546,7 @@ public class CnpcEntity extends PathfinderMob {
                 if (stored != cachedStoredRouteSource) {
                     cachedStoredRouteSource = stored;
                     cachedRoute = stored.stream()
-                        .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks())))
+                        .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks()), p.actionId(), p.actionParameters()))
                         .toList();
                 }
                 return cachedRoute;
@@ -577,6 +622,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void clearRoute() {
+        finishCurrentAction();
         route.clear();
         cachedRoute = List.of();
         cachedStoredRouteSource = List.of();
@@ -593,6 +639,7 @@ public class CnpcEntity extends PathfinderMob {
     public void setRouteEnabled(boolean routeEnabled) {
         this.routeEnabled = routeEnabled;
         if (!routeEnabled) {
+            finishCurrentAction();
             resetMovementTracking();
             waitTicks = 0;
             closeInteractingDoorIfAny();
@@ -624,6 +671,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setAssignedRouteId(String routeId) {
+        finishCurrentAction();
         entityData.set(ROUTE_ID, normalizeId(routeId));
         cachedRoute = List.of();
         cachedStoredRouteSource = List.of();
@@ -810,6 +858,7 @@ public class CnpcEntity extends PathfinderMob {
             p.putDouble("Z", point.pos().z);
             p.putInt("Wait", point.waitTicks());
             p.putBoolean("WaitIsTicks", true);
+            RouteStorage.writeAction(p, point.actionId(), point.actionParameters());
             points.add(p);
         }
         tag.put("Route", points);
@@ -855,7 +904,7 @@ public class CnpcEntity extends PathfinderMob {
             CompoundTag p = (CompoundTag) t;
             Vec3 pos = new Vec3(p.getDouble("X"), p.getDouble("Y"), p.getDouble("Z"));
             if (isFinite(pos)) {
-                route.add(new RoutePoint(pos, decodeWaitTicks(p)));
+                route.add(new RoutePoint(pos, decodeWaitTicks(p), p.getString("Action"), RouteStorage.readActionParameters(p)));
             }
         }
         if (!route.isEmpty()) {
@@ -894,6 +943,7 @@ public class CnpcEntity extends PathfinderMob {
 
     @Override
     public void remove(RemovalReason reason) {
+        finishCurrentAction();
         if (!level().isClientSide) {
             NpcRegistry.untrack(this);
         }
@@ -947,6 +997,9 @@ public class CnpcEntity extends PathfinderMob {
         FLEEING
     }
 
-    private record RoutePoint(Vec3 pos, int waitTicks) {
+    private record RoutePoint(Vec3 pos, int waitTicks, String actionId, Map<String, String> actionParameters) {
+        private RoutePoint(Vec3 pos, int waitTicks) {
+            this(pos, waitTicks, "", Map.of());
+        }
     }
 }
