@@ -412,7 +412,7 @@ public final class CnpcCommands {
             NpcScheduleEntry entry = schedule.get(index);
             context.getSource().sendSuccess(() -> Component.literal("#" + entryNumber + " " + formatScheduleEntry(entry)), false);
         }
-        context.getSource().sendSuccess(() -> Component.literal("Fuera de estas franjas el NPC se detiene; la hora final es exclusiva."), false);
+        context.getSource().sendSuccess(() -> Component.literal("Fuera de estas franjas usa la ruta manual asignada o, si no hay una, continúa la última ruta programada; NightMode sigue teniendo prioridad; la hora final es exclusiva."), false);
         return schedule.size();
     }
 

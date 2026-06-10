@@ -552,19 +552,31 @@ public class CnpcEntity extends PathfinderMob {
         }
 
         int dayTime = (int) Math.floorMod(level().getDayTime(), NpcScheduleEntry.DAY_TICKS);
-        String scheduledRouteId = schedule.stream()
+        String effectiveRouteId = schedule.stream()
             .filter(entry -> entry.contains(dayTime))
             .map(NpcScheduleEntry::routeId)
             .findFirst()
-            .orElse("");
-        if (!scheduledRouteId.equals(activeScheduleRouteId)) {
-            switchEffectiveRoute(scheduledRouteId);
+            .orElseGet(() -> fallbackRouteId(dayTime));
+        if (!effectiveRouteId.equals(activeScheduleRouteId)) {
+            switchEffectiveRoute(effectiveRouteId);
         }
     }
 
-    private void switchEffectiveRoute(String scheduledRouteId) {
+    private String fallbackRouteId(int dayTime) {
+        String assignedRouteId = getAssignedRouteId();
+        if (!assignedRouteId.isBlank()) {
+            return assignedRouteId;
+        }
+
+        return schedule.stream()
+            .min(Comparator.comparingInt(entry -> Math.floorMod(dayTime - entry.endTime(), NpcScheduleEntry.DAY_TICKS)))
+            .map(NpcScheduleEntry::routeId)
+            .orElse("");
+    }
+
+    private void switchEffectiveRoute(String routeId) {
         finishCurrentAction();
-        activeScheduleRouteId = scheduledRouteId;
+        activeScheduleRouteId = routeId;
         cachedRoute = List.of();
         cachedStoredRouteSource = List.of();
         routeIndex = 0;
