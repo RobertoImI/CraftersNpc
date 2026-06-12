@@ -12,9 +12,15 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
+
+import java.util.List;
 
 public class CnpcRenderer extends HumanoidMobRenderer<CnpcEntity, PlayerModel<CnpcEntity>> {
     private static final double MAX_DIALOGUE_DISTANCE_SQR = 32.0D * 32.0D;
+    private static final int MAX_DIALOGUE_LINE_WIDTH = 200;
+    private static final int DIALOGUE_LINE_SPACING = 2;
+    private static final float DIALOGUE_SCALE = 0.025F;
     private final PlayerModel<CnpcEntity> wideModel;
     private final PlayerModel<CnpcEntity> slimModel;
 
@@ -39,15 +45,23 @@ public class CnpcRenderer extends HumanoidMobRenderer<CnpcEntity, PlayerModel<Cn
             return;
         }
 
-        poseStack.pushPose();
-        poseStack.translate(0.0D, entity.getBbHeight() + (entity.hasCustomName() ? 0.75D : 0.5D), 0.0D);
-        poseStack.mulPose(entityRenderDispatcher.cameraOrientation());
-        poseStack.scale(0.025F, -0.025F, 0.025F);
-        Matrix4f matrix = poseStack.last().pose();
         Font font = getFont();
-        Component component = Component.literal(text);
-        float x = -font.width(component) / 2.0F;
-        font.drawInBatch(component, x, 0.0F, 0xFFFFFFFF, false, matrix, buffer, Font.DisplayMode.NORMAL, 0x60000000, packedLight);
+        List<FormattedCharSequence> lines = font.split(Component.literal(text), MAX_DIALOGUE_LINE_WIDTH);
+        int lineStep = font.lineHeight + DIALOGUE_LINE_SPACING;
+        double paragraphLift = Math.max(0, lines.size() - 1) * lineStep * DIALOGUE_SCALE;
+
+        poseStack.pushPose();
+        poseStack.translate(0.0D, entity.getBbHeight() + (entity.hasCustomName() ? 0.75D : 0.5D) + paragraphLift, 0.0D);
+        poseStack.mulPose(entityRenderDispatcher.cameraOrientation());
+        poseStack.scale(DIALOGUE_SCALE, -DIALOGUE_SCALE, DIALOGUE_SCALE);
+        Matrix4f matrix = poseStack.last().pose();
+        for (int index = 0; index < lines.size(); index++) {
+            FormattedCharSequence line = lines.get(index);
+            float x = -font.width(line) / 2.0F;
+            float y = index * lineStep;
+            // SEE_THROUGH prevents the NPC model from depth-occluding parts of its own dialogue.
+            font.drawInBatch(line, x, y, 0xFFFFFFFF, false, matrix, buffer, Font.DisplayMode.SEE_THROUGH, 0x60000000, packedLight);
+        }
         poseStack.popPose();
     }
 

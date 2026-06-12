@@ -60,6 +60,13 @@ public final class CnpcCommands {
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
                             .executes(CnpcCommands::listDialoguePhrases)))
+                    .then(Commands.literal("edit")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("phrase", IntegerArgumentType.integer(1))
+                                .suggests(CnpcCommands::suggestDialoguePhrases)
+                                .then(Commands.argument("newPhrase", StringArgumentType.greedyString())
+                                    .executes(CnpcCommands::editDialoguePhrase)))))
                     .then(Commands.literal("remove")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
@@ -599,6 +606,24 @@ public final class CnpcCommands {
             context.getSource().sendSuccess(() -> line, false);
         }
         return phrases.size();
+    }
+
+    private static int editDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
+        String newPhrase = StringArgumentType.getString(context, "newPhrase");
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!npc.get().editDialoguePhrase(phraseIndex, newPhrase)) {
+            context.getSource().sendFailure(Component.literal("Índice inválido o la frase debe tener entre 1 y "
+                + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH + " caracteres."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase #" + (phraseIndex + 1) + " editada en " + npcId + "."), true);
+        return 1;
     }
 
     private static int removeDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

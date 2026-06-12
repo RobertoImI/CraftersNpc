@@ -43,8 +43,8 @@ import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
-    public static final int MAX_DIALOGUE_PHRASES = 64;
-    public static final int MAX_DIALOGUE_PHRASE_LENGTH = 256;
+    public static final int MAX_DIALOGUE_PHRASES = 256;
+    public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -208,11 +208,20 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public boolean addDialoguePhrase(String phrase) {
-        String normalized = phrase == null ? "" : phrase.strip();
-        if (normalized.isEmpty() || normalized.length() > MAX_DIALOGUE_PHRASE_LENGTH || dialoguePhrases.size() >= MAX_DIALOGUE_PHRASES) {
+        String normalized = normalizeDialoguePhrase(phrase);
+        if (normalized.isEmpty() || dialoguePhrases.size() >= MAX_DIALOGUE_PHRASES) {
             return false;
         }
         dialoguePhrases.add(normalized);
+        return true;
+    }
+
+    public boolean editDialoguePhrase(int index, String phrase) {
+        String normalized = normalizeDialoguePhrase(phrase);
+        if (index < 0 || index >= dialoguePhrases.size() || normalized.isEmpty()) {
+            return false;
+        }
+        dialoguePhrases.set(index, normalized);
         return true;
     }
 
@@ -222,6 +231,11 @@ public class CnpcEntity extends PathfinderMob {
         }
         dialoguePhrases.remove(index);
         return true;
+    }
+
+    private static String normalizeDialoguePhrase(String phrase) {
+        String normalized = phrase == null ? "" : phrase.strip();
+        return normalized.length() <= MAX_DIALOGUE_PHRASE_LENGTH ? normalized : "";
     }
 
     @Override
