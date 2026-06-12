@@ -50,6 +50,22 @@ public final class CnpcCommands {
                     .suggests((ctx, builder) -> suggestSkins(builder))
                     .executes(ctx -> setSkinLooked(ctx, StringArgumentType.getString(ctx, "skin")))))
             .then(Commands.literal("npc")
+                .then(Commands.literal("dialogue")
+                    .then(Commands.literal("assign")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("phrase", StringArgumentType.greedyString())
+                                .executes(CnpcCommands::assignDialoguePhrase))))
+                    .then(Commands.literal("list")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(CnpcCommands::listDialoguePhrases)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("phrase", IntegerArgumentType.integer(1))
+                                .suggests(CnpcCommands::suggestDialoguePhrases)
+                                .executes(CnpcCommands::removeDialoguePhrase)))))
                 .then(Commands.literal("skin")
                     .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommands::suggestNpcIds)
@@ -549,6 +565,62 @@ public final class CnpcCommands {
 
 
 
+    private static int assignDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        String phrase = StringArgumentType.getString(context, "phrase").strip();
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty() || phrase.isEmpty()) {
+            context.getSource().sendFailure(Component.literal(phrase.isEmpty() ? "La frase no puede estar vacía." : "NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!npc.get().addDialoguePhrase(phrase)) {
+            context.getSource().sendFailure(Component.literal("La frase debe tener entre 1 y " + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH
+                + " caracteres y el NPC admite hasta " + CnpcEntity.MAX_DIALOGUE_PHRASES + " frases."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase asignada a " + npcId + "."), true);
+        return 1;
+    }
+
+    private static int listDialoguePhrases(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<String> phrases = npc.get().getDialoguePhrases();
+        if (phrases.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("Frases de " + npcId + ": (sin frases)"), false);
+            return 1;
+        }
+        for (int index = 0; index < phrases.size(); index++) {
+            Component line = Component.literal("#" + (index + 1) + ": " + phrases.get(index));
+            context.getSource().sendSuccess(() -> line, false);
+        }
+        return phrases.size();
+    }
+
+    private static int removeDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!npc.get().removeDialoguePhrase(phraseIndex)) {
+            context.getSource().sendFailure(Component.literal("Índice de frase inválido."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase removida de " + npcId + "."), true);
+        return 1;
+    }
+
+    private static Optional<CnpcEntity> findNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        return NpcRegistry.findById(context.getSource().getPlayerOrException().getServer(), npcId);
+    }
+
     private static int removeNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
@@ -617,6 +689,20 @@ public final class CnpcCommands {
         } catch (CommandSyntaxException | IllegalArgumentException ignored) {
             return builder.buildFuture();
         }
+    }
+
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestDialoguePhrases(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            String npcId = StringArgumentType.getString(context, "npcId");
+            NpcRegistry.findById(context.getSource().getPlayerOrException().getServer(), npcId).ifPresent(npc -> {
+                List<String> phrases = npc.getDialoguePhrases();
+                for (int index = 0; index < phrases.size(); index++) {
+                    builder.suggest(Integer.toString(index + 1), Component.literal(phrases.get(index)));
+                }
+            });
+        } catch (CommandSyntaxException ignored) {
+        }
+        return builder.buildFuture();
     }
 
     private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestScheduleEntries(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {

@@ -2,6 +2,7 @@ package org.crafterscr.craftersnpc;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+import org.crafterscr.craftersnpc.dialogue.DialogueService;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -12,6 +13,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
@@ -25,6 +27,7 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -40,6 +43,8 @@ import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
+    public static final int MAX_DIALOGUE_PHRASES = 64;
+    public static final int MAX_DIALOGUE_PHRASE_LENGTH = 256;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -47,10 +52,13 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> DIALOGUE_TEXT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Integer> DIALOGUE_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
+    private final List<String> dialoguePhrases = new ArrayList<>();
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -80,6 +88,7 @@ public class CnpcEntity extends PathfinderMob {
     private int reactiveTicks;
     private int reactiveAttackCooldown;
     private double walkSpeed = DEFAULT_WALK_SPEED;
+    private UUID dialoguePlayerUuid;
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -116,17 +125,103 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(ROUTE_ID, "");
         builder.define(SLIM_MODEL, false);
         builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
+        builder.define(DIALOGUE_TEXT, "");
+        builder.define(DIALOGUE_TICKS, 0);
     }
 
     @Override
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
+            if (tickDialogue()) {
+                return;
+            }
             if (tickReaction()) {
                 return;
             }
             tickRoute();
         }
+    }
+
+    @Override
+    public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        // Interaction rule: an empty hand talks; non-empty hands remain available to the future gift system.
+        if (!player.getItemInHand(hand).isEmpty()) {
+            return InteractionResult.PASS;
+        }
+        if (level().isClientSide) {
+            return InteractionResult.SUCCESS;
+        }
+        if (player instanceof ServerPlayer serverPlayer && DialogueService.startConversation(this, serverPlayer)) {
+            return InteractionResult.CONSUME;
+        }
+        return InteractionResult.PASS;
+    }
+
+    private boolean tickDialogue() {
+        int remainingTicks = getDialogueTicks();
+        if (remainingTicks <= 0) {
+            return false;
+        }
+
+        Player player = dialoguePlayerUuid == null ? null : level().getPlayerByUUID(dialoguePlayerUuid);
+        if (player != null && player.isAlive()) {
+            getLookControl().setLookAt(player, 30.0F, 30.0F);
+        }
+        getNavigation().stop();
+        setDialogueTicks(remainingTicks - 1);
+        if (remainingTicks == 1) {
+            clearDialogue();
+            reengageRouteNavigation();
+            return false;
+        }
+        return true;
+    }
+
+    public void startDialogue(String text, int durationTicks, ServerPlayer player) {
+        entityData.set(DIALOGUE_TEXT, text);
+        setDialogueTicks(Math.max(1, durationTicks));
+        dialoguePlayerUuid = player.getUUID();
+        getNavigation().stop();
+    }
+
+    private void clearDialogue() {
+        entityData.set(DIALOGUE_TEXT, "");
+        setDialogueTicks(0);
+        dialoguePlayerUuid = null;
+    }
+
+    private void setDialogueTicks(int ticks) {
+        entityData.set(DIALOGUE_TICKS, Math.max(0, ticks));
+    }
+
+    public String getDialogueText() {
+        return entityData.get(DIALOGUE_TEXT);
+    }
+
+    public int getDialogueTicks() {
+        return entityData.get(DIALOGUE_TICKS);
+    }
+
+    public List<String> getDialoguePhrases() {
+        return List.copyOf(dialoguePhrases);
+    }
+
+    public boolean addDialoguePhrase(String phrase) {
+        String normalized = phrase == null ? "" : phrase.strip();
+        if (normalized.isEmpty() || normalized.length() > MAX_DIALOGUE_PHRASE_LENGTH || dialoguePhrases.size() >= MAX_DIALOGUE_PHRASES) {
+            return false;
+        }
+        dialoguePhrases.add(normalized);
+        return true;
+    }
+
+    public boolean removeDialoguePhrase(int index) {
+        if (index < 0 || index >= dialoguePhrases.size()) {
+            return false;
+        }
+        dialoguePhrases.remove(index);
+        return true;
     }
 
     @Override
@@ -943,6 +1038,14 @@ public class CnpcEntity extends PathfinderMob {
         tag.putInt("NightRefugeIndex", nightRefugeIndex);
         tag.putInt("NightReturnRouteIndex", nightReturnRouteIndex);
 
+        ListTag dialogueTag = new ListTag();
+        for (String phrase : dialoguePhrases) {
+            CompoundTag phraseTag = new CompoundTag();
+            phraseTag.putString("Text", phrase);
+            dialogueTag.add(phraseTag);
+        }
+        tag.put("DialoguePhrases", dialogueTag);
+
         ListTag scheduleTag = new ListTag();
         for (NpcScheduleEntry entry : schedule) {
             scheduleTag.add(entry.save());
@@ -996,6 +1099,13 @@ public class CnpcEntity extends PathfinderMob {
         nightModeState = nightStateIndex >= 0 && nightStateIndex < NightModeState.values().length ? NightModeState.values()[nightStateIndex] : NightModeState.NONE;
         nightRefugeIndex = tag.getInt("NightRefugeIndex");
         nightReturnRouteIndex = tag.getInt("NightReturnRouteIndex");
+
+        dialoguePhrases.clear();
+        ListTag dialogueTag = tag.getList("DialoguePhrases", Tag.TAG_COMPOUND);
+        for (Tag value : dialogueTag) {
+            addDialoguePhrase(((CompoundTag) value).getString("Text"));
+        }
+        clearDialogue();
 
         schedule.clear();
         activeScheduleRouteId = "";
