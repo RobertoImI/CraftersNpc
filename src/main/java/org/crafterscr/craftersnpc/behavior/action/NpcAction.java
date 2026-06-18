@@ -1,6 +1,6 @@
 package org.crafterscr.craftersnpc.behavior.action;
 
-import org.crafterscr.craftersnpc.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 import java.util.List;
 import java.util.Map;

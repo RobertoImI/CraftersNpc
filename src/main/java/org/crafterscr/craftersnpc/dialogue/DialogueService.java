@@ -1,6 +1,6 @@
 package org.crafterscr.craftersnpc.dialogue;
 
-import org.crafterscr.craftersnpc.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 import net.minecraft.server.level.ServerPlayer;
 import java.util.List;

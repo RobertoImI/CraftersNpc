@@ -1,4 +1,6 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.skin;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
 
 import net.neoforged.fml.loading.FMLPaths;
 

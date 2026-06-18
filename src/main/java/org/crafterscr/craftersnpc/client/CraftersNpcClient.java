@@ -1,9 +1,13 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.client;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
+import org.crafterscr.craftersnpc.entity.ModEntities;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import org.crafterscr.craftersnpc.client.CnpcRenderer;
 
 import java.io.IOException;
 

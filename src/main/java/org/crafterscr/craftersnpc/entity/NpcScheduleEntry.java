@@ -1,4 +1,4 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.entity;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;

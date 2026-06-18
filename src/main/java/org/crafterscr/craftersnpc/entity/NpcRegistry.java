@@ -1,4 +1,4 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.entity;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;

@@ -1,4 +1,12 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.commands;
+
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.NpcRegistry;
+import org.crafterscr.craftersnpc.entity.NpcScheduleEntry;
+import org.crafterscr.craftersnpc.route.RouteStorage;
+import org.crafterscr.craftersnpc.route.RouteWandManager;
+import org.crafterscr.craftersnpc.skin.SkinDirectory;
+import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.ActionParameters;
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;

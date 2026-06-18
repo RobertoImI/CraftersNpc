@@ -2,7 +2,7 @@ package org.crafterscr.craftersnpc.behavior.action.impl;
 
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
-import org.crafterscr.craftersnpc.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 
 import java.util.Map;

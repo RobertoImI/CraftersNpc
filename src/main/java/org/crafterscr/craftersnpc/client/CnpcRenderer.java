@@ -1,4 +1,6 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.client;
+
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;

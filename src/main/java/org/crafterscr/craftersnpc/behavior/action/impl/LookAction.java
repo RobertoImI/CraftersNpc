@@ -1,6 +1,6 @@
 package org.crafterscr.craftersnpc.behavior.action.impl;
 
-import org.crafterscr.craftersnpc.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.behavior.action.ActionParameters;
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 

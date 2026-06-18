@@ -1,4 +1,6 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.entity;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;

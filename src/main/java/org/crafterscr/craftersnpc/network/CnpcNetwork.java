@@ -1,4 +1,4 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.network;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;

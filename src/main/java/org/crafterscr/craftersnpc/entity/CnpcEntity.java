@@ -1,4 +1,8 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.entity;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
+import org.crafterscr.craftersnpc.route.RouteStorage;
+import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;

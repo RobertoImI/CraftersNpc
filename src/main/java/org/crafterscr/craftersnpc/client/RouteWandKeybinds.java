@@ -1,4 +1,6 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.client;
+
+import org.crafterscr.craftersnpc.network.WandWaitAdjustPayload;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;

@@ -1,4 +1,7 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.client;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
+import org.crafterscr.craftersnpc.skin.SkinDirectory;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;

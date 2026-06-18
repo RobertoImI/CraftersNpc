@@ -1,4 +1,4 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.route;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;

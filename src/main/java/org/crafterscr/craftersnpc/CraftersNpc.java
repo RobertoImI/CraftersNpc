@@ -1,5 +1,11 @@
 package org.crafterscr.craftersnpc;
 
+import org.crafterscr.craftersnpc.client.CraftersNpcClient;
+import org.crafterscr.craftersnpc.commands.CnpcCommands;
+import org.crafterscr.craftersnpc.entity.ModEntities;
+import org.crafterscr.craftersnpc.network.CnpcNetwork;
+import org.crafterscr.craftersnpc.route.RouteWandManager;
+
 import com.mojang.logging.LogUtils;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;

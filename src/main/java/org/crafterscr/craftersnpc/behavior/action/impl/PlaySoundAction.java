@@ -2,7 +2,7 @@ package org.crafterscr.craftersnpc.behavior.action.impl;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import org.crafterscr.craftersnpc.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.behavior.action.ActionParameters;
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 

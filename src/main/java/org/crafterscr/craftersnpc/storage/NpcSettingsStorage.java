@@ -1,4 +1,4 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.storage;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;

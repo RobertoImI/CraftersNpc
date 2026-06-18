@@ -1,4 +1,7 @@
-package org.crafterscr.craftersnpc;
+package org.crafterscr.craftersnpc.network;
+
+import org.crafterscr.craftersnpc.CraftersNpc;
+import org.crafterscr.craftersnpc.route.RouteWandManager;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
