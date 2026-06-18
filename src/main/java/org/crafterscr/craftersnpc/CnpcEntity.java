@@ -36,6 +36,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +46,9 @@ public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
     public static final int MAX_DIALOGUE_PHRASES = 256;
     public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
+    private static final long DIALOGUE_COOLDOWN_TICKS = 20L;
+    private static final long DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS = 20L * 60L;
+    private static final long DIALOGUE_COOLDOWN_ENTRY_TTL_TICKS = DIALOGUE_COOLDOWN_TICKS + DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -59,6 +63,7 @@ public class CnpcEntity extends PathfinderMob {
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
     private final List<String> dialoguePhrases = new ArrayList<>();
+    private final Map<UUID, Long> lastDialogueTicksByPlayer = new HashMap<>();
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -134,6 +139,7 @@ public class CnpcEntity extends PathfinderMob {
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
+            cleanupDialogueCooldowns(level().getGameTime());
             if (tickDialogue()) {
                 return;
             }
@@ -153,10 +159,37 @@ public class CnpcEntity extends PathfinderMob {
         if (level().isClientSide) {
             return InteractionResult.SUCCESS;
         }
-        if (player instanceof ServerPlayer serverPlayer && DialogueService.startConversation(this, serverPlayer)) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
+        }
+
+        long currentTick = level().getGameTime();
+        cleanupDialogueCooldowns(currentTick);
+        if (!canStartDialogue(serverPlayer, currentTick)) {
+            return InteractionResult.CONSUME;
+        }
+
+        if (DialogueService.startConversation(this, serverPlayer)) {
+            markDialogueStarted(serverPlayer, currentTick);
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
+    }
+
+    private boolean canStartDialogue(ServerPlayer player, long currentTick) {
+        Long lastDialogueTick = lastDialogueTicksByPlayer.get(player.getUUID());
+        return lastDialogueTick == null || currentTick - lastDialogueTick >= DIALOGUE_COOLDOWN_TICKS;
+    }
+
+    private void markDialogueStarted(ServerPlayer player, long currentTick) {
+        lastDialogueTicksByPlayer.put(player.getUUID(), currentTick);
+    }
+
+    private void cleanupDialogueCooldowns(long currentTick) {
+        if (currentTick % DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS != 0L) {
+            return;
+        }
+        lastDialogueTicksByPlayer.entrySet().removeIf(entry -> currentTick - entry.getValue() > DIALOGUE_COOLDOWN_ENTRY_TTL_TICKS);
     }
 
     private boolean tickDialogue() {
