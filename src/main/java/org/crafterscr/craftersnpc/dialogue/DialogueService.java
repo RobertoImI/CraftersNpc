@@ -24,10 +24,22 @@ public final class DialogueService {
             return false;
         }
 
-        String phrase = phrases.get(npc.getRandom().nextInt(phrases.size()));
+        int phraseIndex = selectPhraseIndex(npc, phrases.size());
+        String phrase = phrases.get(phraseIndex);
         int duration = durationTicks(phrase);
+        npc.setLastDialoguePhraseIndex(phraseIndex);
         npc.startDialogue(phrase, duration, player);
         return true;
+    }
+
+    private static int selectPhraseIndex(CnpcEntity npc, int phraseCount) {
+        int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
+        if (phraseCount <= 1 || lastPhraseIndex < 0 || lastPhraseIndex >= phraseCount) {
+            return npc.getRandom().nextInt(phraseCount);
+        }
+
+        int phraseIndex = npc.getRandom().nextInt(phraseCount - 1);
+        return phraseIndex >= lastPhraseIndex ? phraseIndex + 1 : phraseIndex;
     }
 
     /** Gives players enough reading time based on the phrase's word count. */

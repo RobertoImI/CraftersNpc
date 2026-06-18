@@ -89,6 +89,7 @@ public class CnpcEntity extends PathfinderMob {
     private int reactiveAttackCooldown;
     private double walkSpeed = DEFAULT_WALK_SPEED;
     private UUID dialoguePlayerUuid;
+    private int lastDialoguePhraseIndex = -1;
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -207,6 +208,14 @@ public class CnpcEntity extends PathfinderMob {
         return List.copyOf(dialoguePhrases);
     }
 
+    public int getLastDialoguePhraseIndex() {
+        return lastDialoguePhraseIndex;
+    }
+
+    public void setLastDialoguePhraseIndex(int index) {
+        lastDialoguePhraseIndex = index >= 0 && index < dialoguePhrases.size() ? index : -1;
+    }
+
     public boolean addDialoguePhrase(String phrase) {
         String normalized = normalizeDialoguePhrase(phrase);
         if (normalized.isEmpty() || dialoguePhrases.size() >= MAX_DIALOGUE_PHRASES) {
@@ -230,6 +239,11 @@ public class CnpcEntity extends PathfinderMob {
             return false;
         }
         dialoguePhrases.remove(index);
+        if (lastDialoguePhraseIndex == index) {
+            lastDialoguePhraseIndex = -1;
+        } else if (lastDialoguePhraseIndex > index) {
+            lastDialoguePhraseIndex--;
+        }
         return true;
     }
 
@@ -1119,6 +1133,7 @@ public class CnpcEntity extends PathfinderMob {
         for (Tag value : dialogueTag) {
             addDialoguePhrase(((CompoundTag) value).getString("Text"));
         }
+        setLastDialoguePhraseIndex(-1);
         clearDialogue();
 
         schedule.clear();
