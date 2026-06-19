@@ -29,23 +29,19 @@ public final class DialogueService {
             return false;
         }
 
-        long gameTime = npc.level().getGameTime();
-        int phraseIndex = selectPhraseIndex(npc, entries, context, gameTime, true);
-        if (phraseIndex < 0) {
-            phraseIndex = selectPhraseIndex(npc, entries, context, gameTime, false);
-        }
+        int phraseIndex = selectPhraseIndex(npc, entries, context);
         if (phraseIndex < 0) {
             return false;
         }
 
         DialogueEntry entry = entries.get(phraseIndex);
         int duration = durationTicks(entry.text());
-        npc.markDialogueEntryUsed(phraseIndex, gameTime);
+        npc.markDialogueEntryUsed(phraseIndex);
         npc.startDialogue(entry.text(), duration, player);
         return true;
     }
 
-    private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, long gameTime, boolean enforceCooldown) {
+    private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context) {
         List<Integer> candidates = new ArrayList<>();
         int totalWeight = 0;
         int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
@@ -55,9 +51,6 @@ public final class DialogueService {
                 continue;
             }
             if (!entry.canUse(context)) {
-                continue;
-            }
-            if (enforceCooldown && gameTime - npc.getLastDialogueEntryTick(index) < entry.cooldownTicks()) {
                 continue;
             }
             candidates.add(index);

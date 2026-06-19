@@ -41,7 +41,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -51,9 +50,6 @@ public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
     public static final int MAX_DIALOGUE_PHRASES = 256;
     public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
-    private static final long DIALOGUE_COOLDOWN_TICKS = 20L;
-    private static final long DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS = 20L * 60L;
-    private static final long DIALOGUE_COOLDOWN_ENTRY_TTL_TICKS = DIALOGUE_COOLDOWN_TICKS + DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -68,8 +64,6 @@ public class CnpcEntity extends PathfinderMob {
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
     private final List<DialogueEntry> dialogueEntries = new ArrayList<>();
-    private final Map<Integer, Long> lastDialogueEntryTicks = new HashMap<>();
-    private final Map<UUID, Long> lastDialogueTicksByPlayer = new HashMap<>();
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -145,7 +139,6 @@ public class CnpcEntity extends PathfinderMob {
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
-            cleanupDialogueCooldowns(level().getGameTime());
             if (tickDialogue()) {
                 return;
             }
@@ -169,33 +162,18 @@ public class CnpcEntity extends PathfinderMob {
             return InteractionResult.PASS;
         }
 
-        long currentTick = level().getGameTime();
-        cleanupDialogueCooldowns(currentTick);
-        if (!canStartDialogue(serverPlayer, currentTick)) {
+        if (!canStartDialogue()) {
             return InteractionResult.CONSUME;
         }
 
         if (DialogueService.startConversation(this, serverPlayer)) {
-            markDialogueStarted(serverPlayer, currentTick);
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
     }
 
-    private boolean canStartDialogue(ServerPlayer player, long currentTick) {
-        Long lastDialogueTick = lastDialogueTicksByPlayer.get(player.getUUID());
-        return lastDialogueTick == null || currentTick - lastDialogueTick >= DIALOGUE_COOLDOWN_TICKS;
-    }
-
-    private void markDialogueStarted(ServerPlayer player, long currentTick) {
-        lastDialogueTicksByPlayer.put(player.getUUID(), currentTick);
-    }
-
-    private void cleanupDialogueCooldowns(long currentTick) {
-        if (currentTick % DIALOGUE_COOLDOWN_CLEANUP_INTERVAL_TICKS != 0L) {
-            return;
-        }
-        lastDialogueTicksByPlayer.entrySet().removeIf(entry -> currentTick - entry.getValue() > DIALOGUE_COOLDOWN_ENTRY_TTL_TICKS);
+    private boolean canStartDialogue() {
+        return getDialogueTicks() <= 0;
     }
 
     private boolean tickDialogue() {
@@ -259,15 +237,8 @@ public class CnpcEntity extends PathfinderMob {
         lastDialoguePhraseIndex = index >= 0 && index < dialogueEntries.size() ? index : -1;
     }
 
-    public long getLastDialogueEntryTick(int index) {
-        return lastDialogueEntryTicks.getOrDefault(index, Long.MIN_VALUE);
-    }
-
-    public void markDialogueEntryUsed(int index, long gameTime) {
-        if (index >= 0 && index < dialogueEntries.size()) {
-            lastDialogueEntryTicks.put(index, gameTime);
-            setLastDialoguePhraseIndex(index);
-        }
+    public void markDialogueEntryUsed(int index) {
+        setLastDialoguePhraseIndex(index);
     }
 
     public boolean addDialoguePhrase(String phrase) {
@@ -275,7 +246,7 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public boolean addDialogueEntry(String phrase, String category) {
-        return addDialogueEntry(new DialogueEntry(phrase, category, DialogueEntry.DEFAULT_WEIGHT, DialogueEntry.DEFAULT_COOLDOWN_TICKS));
+        return addDialogueEntry(new DialogueEntry(phrase, category, DialogueEntry.DEFAULT_WEIGHT));
     }
 
     public boolean addDialogueEntry(DialogueEntry entry) {
@@ -292,7 +263,7 @@ public class CnpcEntity extends PathfinderMob {
             return false;
         }
         DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight(), current.cooldownTicks()));
+        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight()));
         return true;
     }
 
@@ -301,7 +272,6 @@ public class CnpcEntity extends PathfinderMob {
             return false;
         }
         dialogueEntries.remove(index);
-        lastDialogueEntryTicks.clear();
         if (lastDialoguePhraseIndex == index) {
             lastDialoguePhraseIndex = -1;
         } else if (lastDialoguePhraseIndex > index) {
@@ -1190,7 +1160,6 @@ public class CnpcEntity extends PathfinderMob {
         nightReturnRouteIndex = tag.getInt("NightReturnRouteIndex");
 
         dialogueEntries.clear();
-        lastDialogueEntryTicks.clear();
         ListTag dialogueTag = tag.getList("DialoguePhrases", Tag.TAG_COMPOUND);
         for (Tag value : dialogueTag) {
             addDialogueEntry(DialogueEntry.load((CompoundTag) value));

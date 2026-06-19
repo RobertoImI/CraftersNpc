@@ -625,7 +625,7 @@ public final class CnpcCommands {
         for (int index = 0; index < entries.size(); index++) {
             DialogueEntry entry = entries.get(index);
             Component line = Component.literal("#" + (index + 1) + " [" + entry.category() + ", peso " + entry.weight()
-                + ", cooldown " + entry.cooldownTicks() + "t]: " + entry.text());
+                + "]: " + entry.text());
             context.getSource().sendSuccess(() -> line, false);
         }
         return entries.size();
