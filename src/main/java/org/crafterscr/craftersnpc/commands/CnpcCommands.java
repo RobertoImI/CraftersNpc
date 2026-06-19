@@ -3,6 +3,7 @@ package org.crafterscr.craftersnpc.commands;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.entity.NpcRegistry;
 import org.crafterscr.craftersnpc.entity.NpcScheduleEntry;
+import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.route.RouteStorage;
 import org.crafterscr.craftersnpc.route.RouteWandManager;
 import org.crafterscr.craftersnpc.skin.SkinDirectory;
@@ -62,6 +63,9 @@ public final class CnpcCommands {
                     .then(Commands.literal("assign")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
+                            .then(Commands.argument("category", StringArgumentType.word())
+                                .then(Commands.argument("phrase", StringArgumentType.greedyString())
+                                    .executes(CnpcCommands::assignCategorizedDialoguePhrase)))
                             .then(Commands.argument("phrase", StringArgumentType.greedyString())
                                 .executes(CnpcCommands::assignDialoguePhrase))))
                     .then(Commands.literal("list")
@@ -581,19 +585,28 @@ public final class CnpcCommands {
 
 
     private static int assignDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return assignDialoguePhrase(context, DialogueEntry.GENERIC_CATEGORY);
+    }
+
+    private static int assignCategorizedDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return assignDialoguePhrase(context, StringArgumentType.getString(context, "category"));
+    }
+
+    private static int assignDialoguePhrase(CommandContext<CommandSourceStack> context, String category) throws CommandSyntaxException {
         String npcId = StringArgumentType.getString(context, "npcId");
         String phrase = StringArgumentType.getString(context, "phrase").strip();
+        String normalizedCategory = DialogueEntry.normalizeCategory(category);
         Optional<CnpcEntity> npc = findNpc(context, npcId);
         if (npc.isEmpty() || phrase.isEmpty()) {
             context.getSource().sendFailure(Component.literal(phrase.isEmpty() ? "La frase no puede estar vacía." : "NPC no encontrado: " + npcId));
             return 0;
         }
-        if (!npc.get().addDialoguePhrase(phrase)) {
+        if (!npc.get().addDialogueEntry(phrase, normalizedCategory)) {
             context.getSource().sendFailure(Component.literal("La frase debe tener entre 1 y " + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH
                 + " caracteres y el NPC admite hasta " + CnpcEntity.MAX_DIALOGUE_PHRASES + " frases."));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.literal("Frase asignada a " + npcId + "."), true);
+        context.getSource().sendSuccess(() -> Component.literal("Frase [" + normalizedCategory + "] asignada a " + npcId + "."), true);
         return 1;
     }
 
@@ -604,16 +617,18 @@ public final class CnpcCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        List<String> phrases = npc.get().getDialoguePhrases();
-        if (phrases.isEmpty()) {
+        List<DialogueEntry> entries = npc.get().getDialogueEntries();
+        if (entries.isEmpty()) {
             context.getSource().sendSuccess(() -> Component.literal("Frases de " + npcId + ": (sin frases)"), false);
             return 1;
         }
-        for (int index = 0; index < phrases.size(); index++) {
-            Component line = Component.literal("#" + (index + 1) + ": " + phrases.get(index));
+        for (int index = 0; index < entries.size(); index++) {
+            DialogueEntry entry = entries.get(index);
+            Component line = Component.literal("#" + (index + 1) + " [" + entry.category() + ", peso " + entry.weight()
+                + ", cooldown " + entry.cooldownTicks() + "t]: " + entry.text());
             context.getSource().sendSuccess(() -> line, false);
         }
-        return phrases.size();
+        return entries.size();
     }
 
     private static int editDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

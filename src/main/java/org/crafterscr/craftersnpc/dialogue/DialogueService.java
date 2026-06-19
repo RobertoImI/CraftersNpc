@@ -3,6 +3,7 @@ package org.crafterscr.craftersnpc.dialogue;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 import net.minecraft.server.level.ServerPlayer;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Selects and starts the server-authoritative dialogue shown by an NPC. */
@@ -19,27 +20,60 @@ public final class DialogueService {
     }
 
     public static boolean startConversation(CnpcEntity npc, ServerPlayer player) {
-        List<String> phrases = npc.getDialoguePhrases();
-        if (phrases.isEmpty()) {
+        return startConversation(npc, player, DialogueContext.generic());
+    }
+
+    public static boolean startConversation(CnpcEntity npc, ServerPlayer player, DialogueContext context) {
+        List<DialogueEntry> entries = npc.getDialogueEntries();
+        if (entries.isEmpty()) {
             return false;
         }
 
-        int phraseIndex = selectPhraseIndex(npc, phrases.size());
-        String phrase = phrases.get(phraseIndex);
-        int duration = durationTicks(phrase);
-        npc.setLastDialoguePhraseIndex(phraseIndex);
-        npc.startDialogue(phrase, duration, player);
+        long gameTime = npc.level().getGameTime();
+        int phraseIndex = selectPhraseIndex(npc, entries, context, gameTime, true);
+        if (phraseIndex < 0) {
+            phraseIndex = selectPhraseIndex(npc, entries, context, gameTime, false);
+        }
+        if (phraseIndex < 0) {
+            return false;
+        }
+
+        DialogueEntry entry = entries.get(phraseIndex);
+        int duration = durationTicks(entry.text());
+        npc.markDialogueEntryUsed(phraseIndex, gameTime);
+        npc.startDialogue(entry.text(), duration, player);
         return true;
     }
 
-    private static int selectPhraseIndex(CnpcEntity npc, int phraseCount) {
+    private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, long gameTime, boolean enforceCooldown) {
+        List<Integer> candidates = new ArrayList<>();
+        int totalWeight = 0;
         int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
-        if (phraseCount <= 1 || lastPhraseIndex < 0 || lastPhraseIndex >= phraseCount) {
-            return npc.getRandom().nextInt(phraseCount);
+        for (int index = 0; index < entries.size(); index++) {
+            DialogueEntry entry = entries.get(index);
+            if (index == lastPhraseIndex && entries.size() > 1) {
+                continue;
+            }
+            if (!entry.canUse(context)) {
+                continue;
+            }
+            if (enforceCooldown && gameTime - npc.getLastDialogueEntryTick(index) < entry.cooldownTicks()) {
+                continue;
+            }
+            candidates.add(index);
+            totalWeight += entry.weight();
         }
-
-        int phraseIndex = npc.getRandom().nextInt(phraseCount - 1);
-        return phraseIndex >= lastPhraseIndex ? phraseIndex + 1 : phraseIndex;
+        if (candidates.isEmpty()) {
+            return -1;
+        }
+        int selectedWeight = npc.getRandom().nextInt(totalWeight);
+        for (int index : candidates) {
+            selectedWeight -= entries.get(index).weight();
+            if (selectedWeight < 0) {
+                return index;
+            }
+        }
+        return candidates.get(candidates.size() - 1);
     }
 
     /** Gives players enough reading time based on the phrase's word count. */

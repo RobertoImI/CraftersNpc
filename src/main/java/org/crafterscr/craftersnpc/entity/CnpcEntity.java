@@ -6,6 +6,7 @@ import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.dialogue.DialogueService;
 
 import net.minecraft.core.BlockPos;
@@ -66,7 +67,8 @@ public class CnpcEntity extends PathfinderMob {
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
-    private final List<String> dialoguePhrases = new ArrayList<>();
+    private final List<DialogueEntry> dialogueEntries = new ArrayList<>();
+    private final Map<Integer, Long> lastDialogueEntryTicks = new HashMap<>();
     private final Map<UUID, Long> lastDialogueTicksByPlayer = new HashMap<>();
 
     private int routeIndex;
@@ -242,7 +244,11 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public List<String> getDialoguePhrases() {
-        return List.copyOf(dialoguePhrases);
+        return dialogueEntries.stream().map(DialogueEntry::text).toList();
+    }
+
+    public List<DialogueEntry> getDialogueEntries() {
+        return List.copyOf(dialogueEntries);
     }
 
     public int getLastDialoguePhraseIndex() {
@@ -250,32 +256,52 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public void setLastDialoguePhraseIndex(int index) {
-        lastDialoguePhraseIndex = index >= 0 && index < dialoguePhrases.size() ? index : -1;
+        lastDialoguePhraseIndex = index >= 0 && index < dialogueEntries.size() ? index : -1;
+    }
+
+    public long getLastDialogueEntryTick(int index) {
+        return lastDialogueEntryTicks.getOrDefault(index, Long.MIN_VALUE);
+    }
+
+    public void markDialogueEntryUsed(int index, long gameTime) {
+        if (index >= 0 && index < dialogueEntries.size()) {
+            lastDialogueEntryTicks.put(index, gameTime);
+            setLastDialoguePhraseIndex(index);
+        }
     }
 
     public boolean addDialoguePhrase(String phrase) {
-        String normalized = normalizeDialoguePhrase(phrase);
-        if (normalized.isEmpty() || dialoguePhrases.size() >= MAX_DIALOGUE_PHRASES) {
+        return addDialogueEntry(DialogueEntry.generic(phrase));
+    }
+
+    public boolean addDialogueEntry(String phrase, String category) {
+        return addDialogueEntry(new DialogueEntry(phrase, category, DialogueEntry.DEFAULT_WEIGHT, DialogueEntry.DEFAULT_COOLDOWN_TICKS));
+    }
+
+    public boolean addDialogueEntry(DialogueEntry entry) {
+        if (entry.text().isEmpty() || entry.text().length() > MAX_DIALOGUE_PHRASE_LENGTH || dialogueEntries.size() >= MAX_DIALOGUE_PHRASES) {
             return false;
         }
-        dialoguePhrases.add(normalized);
+        dialogueEntries.add(entry);
         return true;
     }
 
     public boolean editDialoguePhrase(int index, String phrase) {
         String normalized = normalizeDialoguePhrase(phrase);
-        if (index < 0 || index >= dialoguePhrases.size() || normalized.isEmpty()) {
+        if (index < 0 || index >= dialogueEntries.size() || normalized.isEmpty()) {
             return false;
         }
-        dialoguePhrases.set(index, normalized);
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight(), current.cooldownTicks()));
         return true;
     }
 
     public boolean removeDialoguePhrase(int index) {
-        if (index < 0 || index >= dialoguePhrases.size()) {
+        if (index < 0 || index >= dialogueEntries.size()) {
             return false;
         }
-        dialoguePhrases.remove(index);
+        dialogueEntries.remove(index);
+        lastDialogueEntryTicks.clear();
         if (lastDialoguePhraseIndex == index) {
             lastDialoguePhraseIndex = -1;
         } else if (lastDialoguePhraseIndex > index) {
@@ -1104,10 +1130,8 @@ public class CnpcEntity extends PathfinderMob {
         tag.putInt("NightReturnRouteIndex", nightReturnRouteIndex);
 
         ListTag dialogueTag = new ListTag();
-        for (String phrase : dialoguePhrases) {
-            CompoundTag phraseTag = new CompoundTag();
-            phraseTag.putString("Text", phrase);
-            dialogueTag.add(phraseTag);
+        for (DialogueEntry entry : dialogueEntries) {
+            dialogueTag.add(entry.save());
         }
         tag.put("DialoguePhrases", dialogueTag);
 
@@ -1165,10 +1189,11 @@ public class CnpcEntity extends PathfinderMob {
         nightRefugeIndex = tag.getInt("NightRefugeIndex");
         nightReturnRouteIndex = tag.getInt("NightReturnRouteIndex");
 
-        dialoguePhrases.clear();
+        dialogueEntries.clear();
+        lastDialogueEntryTicks.clear();
         ListTag dialogueTag = tag.getList("DialoguePhrases", Tag.TAG_COMPOUND);
         for (Tag value : dialogueTag) {
-            addDialoguePhrase(((CompoundTag) value).getString("Text"));
+            addDialogueEntry(DialogueEntry.load((CompoundTag) value));
         }
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
