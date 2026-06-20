@@ -2,6 +2,8 @@ package org.crafterscr.craftersnpc.entity;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
 import org.crafterscr.craftersnpc.route.RouteStorage;
+import org.crafterscr.craftersnpc.reputation.NpcReputation;
+import org.crafterscr.craftersnpc.reputation.ReputationReason;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
@@ -44,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -52,8 +55,6 @@ public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
     public static final int MAX_DIALOGUE_PHRASES = 256;
     public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
-    private static final int HIGH_REPUTATION_THRESHOLD = 50;
-    private static final int LOW_REPUTATION_THRESHOLD = -50;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -174,6 +175,7 @@ public class CnpcEntity extends PathfinderMob {
         NpcPlayerMemory memory = getOrCreatePlayerMemory(serverPlayer);
         DialogueContext context = createDialogueContext(memory);
         if (DialogueService.startConversation(this, serverPlayer, context)) {
+            maybeRewardDialogueReputation(serverPlayer, memory);
             memory.recordInteraction(serverPlayer.getGameProfile().getName(), level().getGameTime());
             return InteractionResult.CONSUME;
         }
@@ -189,23 +191,59 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     private DialogueContext createDialogueContext(NpcPlayerMemory memory) {
-        String category;
+        LinkedHashSet<String> categories = new LinkedHashSet<>();
         if (!memory.greeted()) {
-            category = "saludo";
-        } else if (memory.reputation() >= HIGH_REPUTATION_THRESHOLD) {
-            category = "amistad";
-        } else if (memory.reputation() <= LOW_REPUTATION_THRESHOLD) {
-            category = "hostil";
-        } else {
-            category = DialogueEntry.GENERIC_CATEGORY;
+            categories.add("saludo");
         }
+
+        int reputation = memory.reputation();
+        String category;
+        if (NpcReputation.isFriendly(reputation)) {
+            category = NpcReputation.CATEGORY_FRIENDLY;
+        } else if (NpcReputation.isHostile(reputation)) {
+            category = NpcReputation.CATEGORY_HOSTILE;
+            categories.add(NpcReputation.CATEGORY_FORGIVENESS);
+        } else if (reputation <= NpcReputation.ANNOYED_THRESHOLD) {
+            category = NpcReputation.CATEGORY_ANNOYED;
+        } else {
+            category = NpcReputation.CATEGORY_NEUTRAL;
+        }
+        categories.add(category);
+        categories.add(DialogueEntry.GENERIC_CATEGORY);
+
         return new DialogueContext(
             category,
             memory.playerUuid(),
-            memory.reputation(),
+            reputation,
             memory.greeted(),
-            memory.interactionCount()
+            memory.interactionCount(),
+            categories
         );
+    }
+
+    private void maybeRewardDialogueReputation(ServerPlayer player, NpcPlayerMemory memory) {
+        long gameTime = level().getGameTime();
+        if (gameTime - memory.lastDialogueReputationGameTime() < NpcReputation.DIALOGUE_REWARD_COOLDOWN_TICKS) {
+            return;
+        }
+        adjustReputation(player, NpcReputation.DIALOGUE_REWARD, ReputationReason.DIALOGUE);
+        memory.markDialogueReputationRewarded(gameTime);
+    }
+
+    public int getReputation(ServerPlayer player) {
+        return getOrCreatePlayerMemory(player).reputation();
+    }
+
+    public int adjustReputation(ServerPlayer player, int delta, ReputationReason reason) {
+        return getOrCreatePlayerMemory(player).adjustReputation(delta);
+    }
+
+    public boolean isFriendlyWith(ServerPlayer player) {
+        return NpcReputation.isFriendly(getReputation(player));
+    }
+
+    public boolean isHostileTo(ServerPlayer player) {
+        return NpcReputation.isHostile(getReputation(player));
     }
 
     private boolean canStartDialogue() {
@@ -333,6 +371,9 @@ public class CnpcEntity extends PathfinderMob {
         }
 
         if (source.getEntity() instanceof Player player && player.isAlive()) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                adjustReputation(serverPlayer, NpcReputation.PLAYER_ATTACK_PENALTY, ReputationReason.PLAYER_ATTACK);
+            }
             startReaction(player);
         }
         return true;
