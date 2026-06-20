@@ -42,6 +42,17 @@ public final class DialogueService {
     }
 
     private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context) {
+        CandidatePool exactCandidates = collectCandidates(npc, entries, context, false);
+        CandidatePool candidates = exactCandidates.isEmpty()
+            ? collectCandidates(npc, entries, context, true)
+            : exactCandidates;
+        if (candidates.isEmpty()) {
+            return -1;
+        }
+        return selectWeightedCandidate(npc, entries, candidates);
+    }
+
+    private static CandidatePool collectCandidates(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, boolean genericOnly) {
         List<Integer> candidates = new ArrayList<>();
         int totalWeight = 0;
         int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
@@ -50,23 +61,31 @@ public final class DialogueService {
             if (index == lastPhraseIndex && entries.size() > 1) {
                 continue;
             }
-            if (!entry.canUse(context)) {
+            if (!matchesSelectionPhase(entry, context, genericOnly)) {
                 continue;
             }
             candidates.add(index);
             totalWeight += entry.weight();
         }
-        if (candidates.isEmpty()) {
-            return -1;
+        return new CandidatePool(candidates, totalWeight);
+    }
+
+    private static boolean matchesSelectionPhase(DialogueEntry entry, DialogueContext context, boolean genericOnly) {
+        if (genericOnly) {
+            return context == null || context.matchesGenericCategory(entry.category());
         }
-        int selectedWeight = npc.getRandom().nextInt(totalWeight);
-        for (int index : candidates) {
+        return context == null || context.matchesCategory(entry.category());
+    }
+
+    private static int selectWeightedCandidate(CnpcEntity npc, List<DialogueEntry> entries, CandidatePool candidates) {
+        int selectedWeight = npc.getRandom().nextInt(candidates.totalWeight());
+        for (int index : candidates.indices()) {
             selectedWeight -= entries.get(index).weight();
             if (selectedWeight < 0) {
                 return index;
             }
         }
-        return candidates.get(candidates.size() - 1);
+        return candidates.indices().get(candidates.indices().size() - 1);
     }
 
     /** Gives players enough reading time based on the phrase's word count. */
@@ -93,5 +112,11 @@ public final class DialogueService {
             return 0;
         }
         return text.strip().split("\\s+").length;
+    }
+
+    private record CandidatePool(List<Integer> indices, int totalWeight) {
+        private boolean isEmpty() {
+            return indices.isEmpty();
+        }
     }
 }

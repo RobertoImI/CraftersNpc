@@ -24,7 +24,10 @@ public record DialogueContext(
     }
 
     public boolean matchesCategory(String entryCategory) {
-        String normalized = DialogueEntry.normalizeCategory(entryCategory);
-        return category.equals(normalized) || DialogueEntry.GENERIC_CATEGORY.equals(normalized);
+        return category.equals(DialogueEntry.normalizeCategory(entryCategory));
+    }
+
+    public boolean matchesGenericCategory(String entryCategory) {
+        return DialogueEntry.GENERIC_CATEGORY.equals(DialogueEntry.normalizeCategory(entryCategory));
     }
 }
