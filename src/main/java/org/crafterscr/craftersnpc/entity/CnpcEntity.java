@@ -6,6 +6,7 @@ import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+import org.crafterscr.craftersnpc.dialogue.DialogueContext;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.dialogue.DialogueService;
 
@@ -41,6 +42,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -50,6 +52,8 @@ public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
     public static final int MAX_DIALOGUE_PHRASES = 256;
     public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
+    private static final int HIGH_REPUTATION_THRESHOLD = 50;
+    private static final int LOW_REPUTATION_THRESHOLD = -50;
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -64,6 +68,7 @@ public class CnpcEntity extends PathfinderMob {
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
     private final List<DialogueEntry> dialogueEntries = new ArrayList<>();
+    private final Map<UUID, NpcPlayerMemory> playerMemories = new HashMap<>();
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -166,10 +171,41 @@ public class CnpcEntity extends PathfinderMob {
             return InteractionResult.CONSUME;
         }
 
-        if (DialogueService.startConversation(this, serverPlayer)) {
+        NpcPlayerMemory memory = getOrCreatePlayerMemory(serverPlayer);
+        DialogueContext context = createDialogueContext(memory);
+        if (DialogueService.startConversation(this, serverPlayer, context)) {
+            memory.recordInteraction(serverPlayer.getGameProfile().getName(), level().getGameTime());
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
+    }
+
+    private NpcPlayerMemory getOrCreatePlayerMemory(ServerPlayer player) {
+        UUID playerUuid = player.getUUID();
+        return playerMemories.computeIfAbsent(
+            playerUuid,
+            uuid -> new NpcPlayerMemory(uuid, player.getGameProfile().getName(), level().getGameTime())
+        );
+    }
+
+    private DialogueContext createDialogueContext(NpcPlayerMemory memory) {
+        String category;
+        if (!memory.greeted()) {
+            category = "saludo";
+        } else if (memory.reputation() >= HIGH_REPUTATION_THRESHOLD) {
+            category = "amistad";
+        } else if (memory.reputation() <= LOW_REPUTATION_THRESHOLD) {
+            category = "hostil";
+        } else {
+            category = DialogueEntry.GENERIC_CATEGORY;
+        }
+        return new DialogueContext(
+            category,
+            memory.playerUuid(),
+            memory.reputation(),
+            memory.greeted(),
+            memory.interactionCount()
+        );
     }
 
     private boolean canStartDialogue() {
@@ -1105,6 +1141,12 @@ public class CnpcEntity extends PathfinderMob {
         }
         tag.put("DialoguePhrases", dialogueTag);
 
+        ListTag playerMemoriesTag = new ListTag();
+        for (NpcPlayerMemory memory : playerMemories.values()) {
+            playerMemoriesTag.add(memory.save());
+        }
+        tag.put("PlayerMemories", playerMemoriesTag);
+
         ListTag scheduleTag = new ListTag();
         for (NpcScheduleEntry entry : schedule) {
             scheduleTag.add(entry.save());
@@ -1166,6 +1208,12 @@ public class CnpcEntity extends PathfinderMob {
         }
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
+
+        playerMemories.clear();
+        ListTag playerMemoriesTag = tag.getList("PlayerMemories", Tag.TAG_COMPOUND);
+        for (Tag value : playerMemoriesTag) {
+            NpcPlayerMemory.load((CompoundTag) value).ifPresent(memory -> playerMemories.put(memory.playerUuid(), memory));
+        }
 
         schedule.clear();
         activeScheduleRouteId = "";
