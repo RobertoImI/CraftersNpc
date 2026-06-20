@@ -64,6 +64,9 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> DIALOGUE_TEXT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DIALOGUE_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> REPUTATION_DELTA = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> REPUTATION_INDICATOR_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
+    private static final int REPUTATION_INDICATOR_DURATION_TICKS = 40;
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
@@ -139,12 +142,15 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
         builder.define(DIALOGUE_TEXT, "");
         builder.define(DIALOGUE_TICKS, 0);
+        builder.define(REPUTATION_DELTA, 0);
+        builder.define(REPUTATION_INDICATOR_TICKS, 0);
     }
 
     @Override
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
+            tickReputationIndicator();
             if (tickDialogue()) {
                 return;
             }
@@ -235,7 +241,15 @@ public class CnpcEntity extends PathfinderMob {
     }
 
     public int adjustReputation(ServerPlayer player, int delta, ReputationReason reason) {
-        return getOrCreatePlayerMemory(player).adjustReputation(delta);
+        NpcPlayerMemory memory = getOrCreatePlayerMemory(player);
+        int previousReputation = memory.reputation();
+        int newReputation = memory.adjustReputation(delta);
+        int appliedDelta = newReputation - previousReputation;
+        if (appliedDelta != 0) {
+            entityData.set(REPUTATION_DELTA, appliedDelta);
+            entityData.set(REPUTATION_INDICATOR_TICKS, REPUTATION_INDICATOR_DURATION_TICKS);
+        }
+        return newReputation;
     }
 
     public boolean isFriendlyWith(ServerPlayer player) {
@@ -293,6 +307,25 @@ public class CnpcEntity extends PathfinderMob {
 
     public int getDialogueTicks() {
         return entityData.get(DIALOGUE_TICKS);
+    }
+
+    private void tickReputationIndicator() {
+        int remainingTicks = getReputationIndicatorTicks();
+        if (remainingTicks <= 0) {
+            return;
+        }
+        entityData.set(REPUTATION_INDICATOR_TICKS, remainingTicks - 1);
+        if (remainingTicks == 1) {
+            entityData.set(REPUTATION_DELTA, 0);
+        }
+    }
+
+    public int getReputationDeltaIndicator() {
+        return entityData.get(REPUTATION_DELTA);
+    }
+
+    public int getReputationIndicatorTicks() {
+        return entityData.get(REPUTATION_INDICATOR_TICKS);
     }
 
     public List<String> getDialoguePhrases() {
