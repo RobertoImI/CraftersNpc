@@ -52,14 +52,14 @@ final class NpcManagementCommands {
         return Commands.literal("debug")
                 .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommandSuggestions::suggestNpcIds)
-                        .executes(ctx -> debugNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
+                        .executes(ctx -> NpcSettingsCommands.debugNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
     }
 
     static LiteralArgumentBuilder<CommandSourceStack> registerUnstick() {
         return Commands.literal("unstick")
                 .then(Commands.argument("npcId", StringArgumentType.word())
                         .suggests(CnpcCommandSuggestions::suggestNpcIds)
-                        .executes(ctx -> unstickNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
+                        .executes(ctx -> NpcSettingsCommands.unstickNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
     }
 
     static LiteralArgumentBuilder<CommandSourceStack> registerRemove() {
