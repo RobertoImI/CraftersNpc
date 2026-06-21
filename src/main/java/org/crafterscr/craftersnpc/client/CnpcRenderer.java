@@ -72,8 +72,10 @@ public class CnpcRenderer extends HumanoidMobRenderer<CnpcEntity, PlayerModel<Cn
 
     private void renderReputationIndicator(CnpcEntity entity, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         Minecraft minecraft = Minecraft.getInstance();
-        int delta = entity.getReputationDeltaIndicator();
-        int ticks = entity.getReputationIndicatorTicks();
+        ClientReputationIndicators.Indicator indicator = ClientReputationIndicators.get(entity.getId()).orElse(null);
+        int delta = indicator == null ? entity.getReputationDeltaIndicator() : indicator.reputationDelta();
+        int ticks = indicator == null ? entity.getReputationIndicatorTicks() : indicator.remainingTicks();
+        int durationTicks = indicator == null ? REPUTATION_INDICATOR_DURATION_TICKS : indicator.durationTicks();
         if (delta == 0 || ticks <= 0 || minecraft.player == null
             || entity.distanceToSqr(minecraft.player) > MAX_DIALOGUE_DISTANCE_SQR || entity.isInvisibleTo(minecraft.player)) {
             return;
@@ -82,7 +84,7 @@ public class CnpcRenderer extends HumanoidMobRenderer<CnpcEntity, PlayerModel<Cn
         Font font = getFont();
         String arrow = delta > 0 ? "↑" : "↓";
         int color = delta > 0 ? 0x55FF55 : 0xFF5555;
-        float remainingPercent = Math.min(1.0F, Math.max(0.0F, (ticks - partialTicks) / REPUTATION_INDICATOR_DURATION_TICKS));
+        float remainingPercent = Math.min(1.0F, Math.max(0.0F, (ticks - partialTicks) / durationTicks));
         double upwardOffset = (1.0F - remainingPercent) * REPUTATION_INDICATOR_RISE;
 
         String dialogueText = entity.getDialogueText();

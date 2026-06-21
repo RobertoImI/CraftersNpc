@@ -2,6 +2,7 @@ package org.crafterscr.craftersnpc.entity;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
 import org.crafterscr.craftersnpc.route.RouteStorage;
+import org.crafterscr.craftersnpc.network.ReputationIndicatorPayload;
 import org.crafterscr.craftersnpc.reputation.NpcReputation;
 import org.crafterscr.craftersnpc.reputation.ReputationReason;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
@@ -41,6 +42,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -246,10 +248,27 @@ public class CnpcEntity extends PathfinderMob {
         int newReputation = memory.adjustReputation(delta);
         int appliedDelta = newReputation - previousReputation;
         if (appliedDelta != 0) {
-            entityData.set(REPUTATION_DELTA, appliedDelta);
-            entityData.set(REPUTATION_INDICATOR_TICKS, REPUTATION_INDICATOR_DURATION_TICKS);
+            sendReputationIndicator(player, appliedDelta, newReputation);
         }
         return newReputation;
+    }
+
+    private void sendReputationIndicator(ServerPlayer player, int appliedDelta, int currentReputation) {
+        PacketDistributor.sendToPlayer(
+            player,
+            new ReputationIndicatorPayload(getId(), appliedDelta, currentReputation, REPUTATION_INDICATOR_DURATION_TICKS)
+        );
+    }
+
+    /**
+     * Fallback for non-private reputation indicators. Using this makes every tracking client see the change.
+     */
+    public void showSharedReputationIndicator(int appliedDelta) {
+        if (appliedDelta == 0) {
+            return;
+        }
+        entityData.set(REPUTATION_DELTA, appliedDelta);
+        entityData.set(REPUTATION_INDICATOR_TICKS, REPUTATION_INDICATOR_DURATION_TICKS);
     }
 
     public boolean isFriendlyWith(ServerPlayer player) {

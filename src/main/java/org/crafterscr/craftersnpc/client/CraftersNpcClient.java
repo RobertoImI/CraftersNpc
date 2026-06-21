@@ -5,9 +5,9 @@ import org.crafterscr.craftersnpc.entity.ModEntities;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import org.crafterscr.craftersnpc.client.CnpcRenderer;
 
 import java.io.IOException;
 
@@ -20,6 +20,7 @@ public final class CraftersNpcClient {
         modEventBus.addListener(CraftersNpcClient::onClientSetup);
         RouteWandKeybinds.register(modEventBus);
         NeoForge.EVENT_BUS.addListener(RouteWandKeybinds::onClientTick);
+        NeoForge.EVENT_BUS.addListener(CraftersNpcClient::onClientTick);
     }
 
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
@@ -35,5 +36,9 @@ public final class CraftersNpcClient {
                 CraftersNpc.LOGGER.error("No se pudo crear la carpeta de skins de CNPC", e);
             }
         });
+    }
+
+    private static void onClientTick(ClientTickEvent.Post event) {
+        ClientReputationIndicators.tick();
     }
 }
