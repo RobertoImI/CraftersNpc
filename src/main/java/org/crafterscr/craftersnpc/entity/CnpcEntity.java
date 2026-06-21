@@ -2,8 +2,10 @@ package org.crafterscr.craftersnpc.entity;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
 import org.crafterscr.craftersnpc.route.RouteStorage;
-import org.crafterscr.craftersnpc.network.ReputationIndicatorPayload;
 import org.crafterscr.craftersnpc.reputation.NpcReputation;
+import org.crafterscr.craftersnpc.entity.ai.NpcReactionController;
+import org.crafterscr.craftersnpc.entity.ai.NpcRouteController;
+import org.crafterscr.craftersnpc.entity.ai.NpcSocialController;
 import org.crafterscr.craftersnpc.reputation.ReputationReason;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
@@ -42,13 +44,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -68,13 +67,15 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<Integer> DIALOGUE_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> REPUTATION_DELTA = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> REPUTATION_INDICATOR_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
-    private static final int REPUTATION_INDICATOR_DURATION_TICKS = 40;
+    public static final int REPUTATION_INDICATOR_DURATION_TICKS = 40;
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
     private final List<DialogueEntry> dialogueEntries = new ArrayList<>();
-    private final Map<UUID, NpcPlayerMemory> playerMemories = new HashMap<>();
+    private final NpcSocialController socialController = new NpcSocialController(this);
+    private final NpcReactionController reactionController = new NpcReactionController(this);
+    private final NpcRouteController routeController = new NpcRouteController(this);
 
     private int routeIndex;
     private boolean movingForward = true;
@@ -99,10 +100,6 @@ public class CnpcEntity extends PathfinderMob {
     private List<RoutePoint> cachedRoute = List.of();
     private List<RouteStorage.RoutePoint> cachedStoredRouteSource = List.of();
 
-    private ReactionState reactionState = ReactionState.NONE;
-    private UUID reactivePlayerUuid;
-    private int reactiveTicks;
-    private int reactiveAttackCooldown;
     private double walkSpeed = DEFAULT_WALK_SPEED;
     private UUID dialoguePlayerUuid;
     private int lastDialoguePhraseIndex = -1;
@@ -156,10 +153,10 @@ public class CnpcEntity extends PathfinderMob {
             if (tickDialogue()) {
                 return;
             }
-            if (tickReaction()) {
+            if (reactionController.tick()) {
                 return;
             }
-            tickRoute();
+            routeController.tick();
         }
     }
 
@@ -180,84 +177,22 @@ public class CnpcEntity extends PathfinderMob {
             return InteractionResult.CONSUME;
         }
 
-        NpcPlayerMemory memory = getOrCreatePlayerMemory(serverPlayer);
-        DialogueContext context = createDialogueContext(memory);
+        NpcPlayerMemory memory = socialController.getOrCreatePlayerMemory(serverPlayer);
+        DialogueContext context = socialController.createDialogueContext(memory);
         if (DialogueService.startConversation(this, serverPlayer, context, memory)) {
-            maybeRewardDialogueReputation(serverPlayer, memory);
+            socialController.maybeRewardDialogueReputation(serverPlayer, memory);
             memory.recordInteraction(serverPlayer.getGameProfile().getName(), level().getGameTime());
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
     }
 
-    private NpcPlayerMemory getOrCreatePlayerMemory(ServerPlayer player) {
-        UUID playerUuid = player.getUUID();
-        return playerMemories.computeIfAbsent(
-            playerUuid,
-            uuid -> new NpcPlayerMemory(uuid, player.getGameProfile().getName(), level().getGameTime())
-        );
-    }
-
-    private DialogueContext createDialogueContext(NpcPlayerMemory memory) {
-        LinkedHashSet<String> categories = new LinkedHashSet<>();
-        if (!memory.greeted()) {
-            categories.add("saludo");
-        }
-
-        int reputation = memory.reputation();
-        String category;
-        if (NpcReputation.isFriendly(reputation)) {
-            category = NpcReputation.CATEGORY_FRIENDLY;
-        } else if (NpcReputation.isHostile(reputation)) {
-            category = NpcReputation.CATEGORY_HOSTILE;
-            categories.add(NpcReputation.CATEGORY_FORGIVENESS);
-        } else if (reputation <= NpcReputation.ANNOYED_THRESHOLD) {
-            category = NpcReputation.CATEGORY_ANNOYED;
-        } else {
-            category = NpcReputation.CATEGORY_NEUTRAL;
-        }
-        categories.add(category);
-        categories.add(DialogueEntry.GENERIC_CATEGORY);
-
-        return new DialogueContext(
-            category,
-            memory.playerUuid(),
-            reputation,
-            memory.greeted(),
-            memory.interactionCount(),
-            categories
-        );
-    }
-
-    private void maybeRewardDialogueReputation(ServerPlayer player, NpcPlayerMemory memory) {
-        long gameTime = level().getGameTime();
-        if (gameTime - memory.lastDialogueReputationGameTime() < NpcReputation.DIALOGUE_REWARD_COOLDOWN_TICKS) {
-            return;
-        }
-        adjustReputation(player, NpcReputation.DIALOGUE_REWARD, ReputationReason.DIALOGUE);
-        memory.markDialogueReputationRewarded(gameTime);
-    }
-
     public int getReputation(ServerPlayer player) {
-        return getOrCreatePlayerMemory(player).reputation();
+        return socialController.getReputation(player);
     }
 
     public int adjustReputation(ServerPlayer player, int delta, ReputationReason reason) {
-        NpcPlayerMemory memory = getOrCreatePlayerMemory(player);
-        int previousReputation = memory.reputation();
-        int newReputation = memory.adjustReputation(delta);
-        int appliedDelta = newReputation - previousReputation;
-        if (appliedDelta != 0) {
-            sendReputationIndicator(player, appliedDelta, newReputation);
-        }
-        return newReputation;
-    }
-
-    private void sendReputationIndicator(ServerPlayer player, int appliedDelta, int currentReputation) {
-        PacketDistributor.sendToPlayer(
-            player,
-            new ReputationIndicatorPayload(getId(), appliedDelta, currentReputation, REPUTATION_INDICATOR_DURATION_TICKS)
-        );
+        return socialController.adjustReputation(player, delta, reason);
     }
 
     /**
@@ -367,7 +302,7 @@ public class CnpcEntity extends PathfinderMob {
         if (context == null || context.playerUuid() == null) {
             return context;
         }
-        NpcPlayerMemory memory = playerMemories.get(context.playerUuid());
+        NpcPlayerMemory memory = socialController.getPlayerMemory(context.playerUuid());
         if (memory == null) {
             return context;
         }
@@ -378,7 +313,7 @@ public class CnpcEntity extends PathfinderMob {
     public void markDialogueEntryUsed(int index, int cooldownTicks, ServerPlayer player) {
         setLastDialoguePhraseIndex(index);
         if (player != null) {
-            getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
+            socialController.getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
         }
     }
 
@@ -479,7 +414,7 @@ public class CnpcEntity extends PathfinderMob {
         } else if (lastDialoguePhraseIndex > index) {
             lastDialoguePhraseIndex--;
         }
-        for (NpcPlayerMemory memory : playerMemories.values()) {
+        for (NpcPlayerMemory memory : socialController.playerMemories()) {
             memory.removeDialogueEntryIndex(index);
         }
         return true;
@@ -505,83 +440,12 @@ public class CnpcEntity extends PathfinderMob {
             if (player instanceof ServerPlayer serverPlayer) {
                 adjustReputation(serverPlayer, NpcReputation.PLAYER_ATTACK_PENALTY, ReputationReason.PLAYER_ATTACK);
             }
-            startReaction(player);
+            reactionController.start(player);
         }
         return true;
     }
 
-    private boolean tickReaction() {
-        if (reactionState == ReactionState.NONE || reactiveTicks <= 0 || reactivePlayerUuid == null || !(level() instanceof ServerLevel serverLevel)) {
-            stopReaction();
-            return false;
-        }
-
-        Player player = serverLevel.getPlayerByUUID(reactivePlayerUuid);
-        if (player == null || !player.isAlive() || player.isSpectator()) {
-            stopReaction();
-            return false;
-        }
-
-        reactiveTicks--;
-        if (reactionState == ReactionState.ATTACKING) {
-            getLookControl().setLookAt(player, 30.0F, 30.0F);
-            getNavigation().moveTo(player, 1.15D);
-            if (reactiveAttackCooldown > 0) {
-                reactiveAttackCooldown--;
-            }
-            if (distanceToSqr(player) <= 4.0D && reactiveAttackCooldown <= 0) {
-                swing(InteractionHand.MAIN_HAND);
-                float attackDamage = (float) getAttributeValue(Attributes.ATTACK_DAMAGE);
-                player.hurt(damageSources().mobAttack(this), attackDamage);
-                reactiveAttackCooldown = 15;
-            }
-        } else if (reactionState == ReactionState.FLEEING) {
-            Vec3 away = position().subtract(player.position());
-            Vec3 horizontalAway = new Vec3(away.x, 0.0D, away.z);
-            if (horizontalAway.lengthSqr() <= 1.0E-4D) {
-                horizontalAway = new Vec3((random.nextDouble() - 0.5D) * 2.0D, 0.0D, (random.nextDouble() - 0.5D) * 2.0D);
-            }
-            Vec3 fleeTarget = position().add(horizontalAway.normalize().scale(6.0D));
-            getNavigation().moveTo(fleeTarget.x, position().y, fleeTarget.z, 1.2D);
-        }
-
-        if (reactiveTicks <= 0) {
-            stopReaction();
-            return false;
-        }
-        return true;
-    }
-
-    private void startReaction(Player player) {
-        Temperament temperament = getTemperament();
-        reactionState = switch (temperament) {
-            case AGRESIVO -> ReactionState.ATTACKING;
-            case ALEATORIO -> random.nextBoolean() ? ReactionState.ATTACKING : ReactionState.FLEEING;
-            case PACIFICO -> ReactionState.FLEEING;
-        };
-
-        reactivePlayerUuid = player.getUUID();
-        reactiveTicks = 20 * 8;
-        reactiveAttackCooldown = 0;
-        finishCurrentAction();
-        waitTicks = 0;
-        resetMovementTracking();
-        closeInteractingDoorIfAny();
-        getNavigation().stop();
-    }
-
-    private void stopReaction() {
-        if (reactionState == ReactionState.NONE && reactivePlayerUuid == null && reactiveTicks == 0) {
-            return;
-        }
-        reactionState = ReactionState.NONE;
-        reactivePlayerUuid = null;
-        reactiveTicks = 0;
-        reactiveAttackCooldown = 0;
-        reengageRouteNavigation();
-    }
-
-    private void tickRoute() {
+    public void tickRouteInternal() {
         tickDoorInteraction();
         updateScheduledRoute();
 
@@ -898,7 +762,7 @@ public class CnpcEntity extends PathfinderMob {
         }
     }
 
-    private void finishCurrentAction() {
+    public void finishCurrentAction() {
         if (activeRouteAction == null) {
             return;
         }
@@ -1219,8 +1083,8 @@ public class CnpcEntity extends PathfinderMob {
             + ", nightModeOnly=" + nightModeOnly
             + ", walkSpeed=" + String.format(Locale.ROOT, "%.2f", walkSpeed)
             + ", temperament=" + getTemperament().id
-            + ", reaction=" + reactionState
-            + ", reactiveTicks=" + reactiveTicks
+            + ", reaction=" + reactionController.debugState()
+            + ", reactiveTicks=" + reactionController.reactiveTicks()
             + ", nightState=" + nightModeState
             + ", nightRefugeIndex=" + nightRefugeIndex
             + ", nightRefugeCount=" + nightRefugePoints.size()
@@ -1233,7 +1097,7 @@ public class CnpcEntity extends PathfinderMob {
         return "(" + Mth.floor(vec.x) + "," + Mth.floor(vec.y) + "," + Mth.floor(vec.z) + ")";
     }
 
-    private void resetMovementTracking() {
+    public void resetMovementTracking() {
         repathTicks = 0;
         stuckTicks = 0;
         noProgressTicks = 0;
@@ -1248,7 +1112,7 @@ public class CnpcEntity extends PathfinderMob {
         return nightRefugeIndex >= 0 && nightRefugeIndex < nightRefugePoints.size();
     }
 
-    private void reengageRouteNavigation() {
+    public void reengageRouteNavigation() {
         getNavigation().stop();
         if (!routeEnabled) {
             return;
@@ -1263,6 +1127,13 @@ public class CnpcEntity extends PathfinderMob {
         getNavigation().moveTo(nextCenter.x, nextCenter.y, nextCenter.z, 1.0D);
     }
 
+    public void stopRouteForReaction() {
+        finishCurrentAction();
+        waitTicks = 0;
+        resetMovementTracking();
+        closeInteractingDoorIfAny();
+        getNavigation().stop();
+    }
 
     private static boolean isFinite(Vec3 pos) {
         return Double.isFinite(pos.x) && Double.isFinite(pos.y) && Double.isFinite(pos.z);
@@ -1280,7 +1151,7 @@ public class CnpcEntity extends PathfinderMob {
         return normalizeWaitTicks(rawWait * 20);
     }
 
-    private void closeInteractingDoorIfAny() {
+    public void closeInteractingDoorIfAny() {
         if (interactingDoorPos != null) {
             setDoorOpen(interactingDoorPos, false);
         }
@@ -1315,9 +1186,7 @@ public class CnpcEntity extends PathfinderMob {
         tag.put("DialoguePhrases", dialogueTag);
 
         ListTag playerMemoriesTag = new ListTag();
-        for (NpcPlayerMemory memory : playerMemories.values()) {
-            playerMemoriesTag.add(memory.save());
-        }
+        socialController.savePlayerMemories(playerMemoriesTag);
         tag.put("PlayerMemories", playerMemoriesTag);
 
         ListTag scheduleTag = new ListTag();
@@ -1382,11 +1251,8 @@ public class CnpcEntity extends PathfinderMob {
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
 
-        playerMemories.clear();
         ListTag playerMemoriesTag = tag.getList("PlayerMemories", Tag.TAG_COMPOUND);
-        for (Tag value : playerMemoriesTag) {
-            NpcPlayerMemory.load((CompoundTag) value).ifPresent(memory -> playerMemories.put(memory.playerUuid(), memory));
-        }
+        socialController.loadPlayerMemories(playerMemoriesTag);
 
         schedule.clear();
         activeScheduleRouteId = "";
@@ -1494,12 +1360,6 @@ public class CnpcEntity extends PathfinderMob {
             }
             return PACIFICO;
         }
-    }
-
-    private enum ReactionState {
-        NONE,
-        ATTACKING,
-        FLEEING
     }
 
     private record RoutePoint(Vec3 pos, int waitTicks, String actionId, Map<String, String> actionParameters) {
