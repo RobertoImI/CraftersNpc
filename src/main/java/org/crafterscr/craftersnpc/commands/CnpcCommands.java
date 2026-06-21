@@ -72,13 +72,33 @@ public final class CnpcCommands {
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
                             .executes(CnpcCommands::listDialoguePhrases)))
+                    .then(Commands.literal("metadata")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                            .suggests(CnpcCommands::suggestNpcIds)
+                            .executes(CnpcCommands::listDialogueMetadata)))
                     .then(Commands.literal("edit")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
                             .then(Commands.argument("phrase", IntegerArgumentType.integer(1))
                                 .suggests(CnpcCommands::suggestDialoguePhrases)
                                 .then(Commands.argument("newPhrase", StringArgumentType.greedyString())
-                                    .executes(CnpcCommands::editDialoguePhrase)))))
+                                    .executes(CnpcCommands::editDialoguePhrase))
+                                .then(Commands.literal("weight")
+                                    .then(Commands.argument("weight", IntegerArgumentType.integer(1, 10_000))
+                                        .executes(CnpcCommands::editDialogueWeight)))
+                                .then(Commands.literal("reputation")
+                                    .then(Commands.argument("min", IntegerArgumentType.integer(-100, 100))
+                                        .then(Commands.argument("max", IntegerArgumentType.integer(-100, 100))
+                                            .executes(CnpcCommands::editDialogueReputationRange))))
+                                .then(Commands.literal("once")
+                                    .then(Commands.literal("on").executes(ctx -> editDialogueOncePerPlayer(ctx, true)))
+                                    .then(Commands.literal("off").executes(ctx -> editDialogueOncePerPlayer(ctx, false))))
+                                .then(Commands.literal("cooldown")
+                                    .then(Commands.argument("ticks", IntegerArgumentType.integer(0))
+                                        .executes(CnpcCommands::editDialogueCooldown)))
+                                .then(Commands.literal("priority")
+                                    .then(Commands.argument("priority", IntegerArgumentType.integer())
+                                        .executes(CnpcCommands::editDialoguePriority))))))
                     .then(Commands.literal("remove")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                             .suggests(CnpcCommands::suggestNpcIds)
@@ -631,6 +651,33 @@ public final class CnpcCommands {
         return entries.size();
     }
 
+    private static int listDialogueMetadata(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<DialogueEntry> entries = npc.get().getDialogueEntries();
+        if (entries.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("Metadatos de diálogo de " + npcId + ": (sin frases)"), false);
+            return 1;
+        }
+        for (int index = 0; index < entries.size(); index++) {
+            DialogueEntry entry = entries.get(index);
+            Component line = Component.literal("#" + (index + 1)
+                + " [categoria=" + entry.category()
+                + ", peso=" + entry.weight()
+                + ", reputacion=" + entry.minReputation() + ".." + entry.maxReputation()
+                + ", oncePerPlayer=" + entry.oncePerPlayer()
+                + ", cooldownTicks=" + entry.cooldownTicks()
+                + ", prioridad=" + entry.priority()
+                + "]: " + entry.text());
+            context.getSource().sendSuccess(() -> line, false);
+        }
+        return entries.size();
+    }
+
     private static int editDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String npcId = StringArgumentType.getString(context, "npcId");
         int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
@@ -646,6 +693,53 @@ public final class CnpcCommands {
             return 0;
         }
         context.getSource().sendSuccess(() -> Component.literal("Frase #" + (phraseIndex + 1) + " editada en " + npcId + "."), true);
+        return 1;
+    }
+
+    private static int editDialogueWeight(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return editDialogueMetadata(context, "peso", npc -> npc.editDialogueWeight(
+            IntegerArgumentType.getInteger(context, "phrase") - 1,
+            IntegerArgumentType.getInteger(context, "weight")));
+    }
+
+    private static int editDialogueReputationRange(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return editDialogueMetadata(context, "rango de reputación", npc -> npc.editDialogueReputationRange(
+            IntegerArgumentType.getInteger(context, "phrase") - 1,
+            IntegerArgumentType.getInteger(context, "min"),
+            IntegerArgumentType.getInteger(context, "max")));
+    }
+
+    private static int editDialogueOncePerPlayer(CommandContext<CommandSourceStack> context, boolean oncePerPlayer) throws CommandSyntaxException {
+        return editDialogueMetadata(context, "oncePerPlayer", npc -> npc.editDialogueOncePerPlayer(
+            IntegerArgumentType.getInteger(context, "phrase") - 1,
+            oncePerPlayer));
+    }
+
+    private static int editDialogueCooldown(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return editDialogueMetadata(context, "cooldown", npc -> npc.editDialogueCooldown(
+            IntegerArgumentType.getInteger(context, "phrase") - 1,
+            IntegerArgumentType.getInteger(context, "ticks")));
+    }
+
+    private static int editDialoguePriority(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return editDialogueMetadata(context, "prioridad", npc -> npc.editDialoguePriority(
+            IntegerArgumentType.getInteger(context, "phrase") - 1,
+            IntegerArgumentType.getInteger(context, "priority")));
+    }
+
+    private static int editDialogueMetadata(CommandContext<CommandSourceStack> context, String field, java.util.function.Predicate<CnpcEntity> update) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!update.test(npc.get())) {
+            context.getSource().sendFailure(Component.literal("Índice de frase inválido."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase #" + (phraseIndex + 1) + ": " + field + " actualizado en " + npcId + "."), true);
         return 1;
     }
 

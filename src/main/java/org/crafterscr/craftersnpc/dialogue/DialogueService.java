@@ -36,7 +36,7 @@ public final class DialogueService {
 
         DialogueEntry entry = entries.get(phraseIndex);
         int duration = durationTicks(entry.text());
-        npc.markDialogueEntryUsed(phraseIndex);
+        npc.markDialogueEntryUsed(phraseIndex, player);
         npc.startDialogue(entry.text(), duration, player);
         return true;
     }
@@ -55,13 +55,22 @@ public final class DialogueService {
     private static CandidatePool collectCandidates(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, boolean genericOnly) {
         List<Integer> candidates = new ArrayList<>();
         int totalWeight = 0;
+        int bestPriority = Integer.MIN_VALUE;
         int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
         for (int index = 0; index < entries.size(); index++) {
             DialogueEntry entry = entries.get(index);
             if (index == lastPhraseIndex && entries.size() > 1) {
                 continue;
             }
-            if (!matchesSelectionPhase(entry, context, genericOnly)) {
+            DialogueContext entryContext = npc.withDialogueEntryState(context, index);
+            if (!matchesSelectionPhase(entry, entryContext, genericOnly)) {
+                continue;
+            }
+            if (entry.priority() > bestPriority) {
+                candidates.clear();
+                totalWeight = 0;
+                bestPriority = entry.priority();
+            } else if (entry.priority() < bestPriority) {
                 continue;
             }
             candidates.add(index);
@@ -72,9 +81,9 @@ public final class DialogueService {
 
     private static boolean matchesSelectionPhase(DialogueEntry entry, DialogueContext context, boolean genericOnly) {
         if (genericOnly) {
-            return context == null || context.matchesGenericCategory(entry.category());
+            return context == null || (context.matchesGenericCategory(entry.category()) && entry.canUse(context));
         }
-        return context == null || context.matchesCategory(entry.category());
+        return entry.canUse(context);
     }
 
     private static int selectWeightedCandidate(CnpcEntity npc, List<DialogueEntry> entries, CandidatePool candidates) {

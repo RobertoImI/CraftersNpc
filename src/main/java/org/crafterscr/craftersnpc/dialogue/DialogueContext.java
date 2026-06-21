@@ -10,7 +10,9 @@ public record DialogueContext(
     int reputation,
     boolean hasMetBefore,
     int interactionCount,
-    Set<String> activeCategories
+    Set<String> activeCategories,
+    boolean hasUsedDialogueEntry,
+    long ticksSinceDialogueEntryUsed
 ) {
     public static DialogueContext generic() {
         return new DialogueContext(DialogueEntry.GENERIC_CATEGORY, null, 0, false, 0);
@@ -24,6 +26,10 @@ public record DialogueContext(
         this(category, playerUuid, reputation, hasMetBefore, interactionCount, Set.of(DialogueEntry.normalizeCategory(category)));
     }
 
+    public DialogueContext(String category, UUID playerUuid, int reputation, boolean hasMetBefore, int interactionCount, Set<String> activeCategories) {
+        this(category, playerUuid, reputation, hasMetBefore, interactionCount, activeCategories, false, -1L);
+    }
+
     public DialogueContext {
         category = DialogueEntry.normalizeCategory(category);
         interactionCount = Math.max(0, interactionCount);
@@ -32,6 +38,7 @@ public record DialogueContext(
             : activeCategories.stream()
                 .map(DialogueEntry::normalizeCategory)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        ticksSinceDialogueEntryUsed = Math.max(-1L, ticksSinceDialogueEntryUsed);
     }
 
     public boolean matchesCategory(String entryCategory) {
@@ -40,5 +47,9 @@ public record DialogueContext(
 
     public boolean matchesGenericCategory(String entryCategory) {
         return DialogueEntry.GENERIC_CATEGORY.equals(DialogueEntry.normalizeCategory(entryCategory));
+    }
+
+    public DialogueContext withDialogueEntryState(boolean used, long ticksSinceUsed) {
+        return new DialogueContext(category, playerUuid, reputation, hasMetBefore, interactionCount, activeCategories, used, ticksSinceUsed);
     }
 }

@@ -363,8 +363,23 @@ public class CnpcEntity extends PathfinderMob {
         lastDialoguePhraseIndex = index >= 0 && index < dialogueEntries.size() ? index : -1;
     }
 
-    public void markDialogueEntryUsed(int index) {
+    public DialogueContext withDialogueEntryState(DialogueContext context, int index) {
+        if (context == null || context.playerUuid() == null) {
+            return context;
+        }
+        NpcPlayerMemory memory = playerMemories.get(context.playerUuid());
+        if (memory == null) {
+            return context;
+        }
+        long gameTime = level().getGameTime();
+        return context.withDialogueEntryState(memory.hasUsedDialogueEntry(index), memory.ticksSinceDialogueEntryUsed(index, gameTime));
+    }
+
+    public void markDialogueEntryUsed(int index, ServerPlayer player) {
         setLastDialoguePhraseIndex(index);
+        if (player != null) {
+            getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, level().getGameTime());
+        }
     }
 
     public boolean addDialoguePhrase(String phrase) {
@@ -389,7 +404,58 @@ public class CnpcEntity extends PathfinderMob {
             return false;
         }
         DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight()));
+        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight(), current.minReputation(),
+            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
+        return true;
+    }
+
+    public boolean editDialogueWeight(int index, int weight) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), weight, current.minReputation(),
+            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
+        return true;
+    }
+
+    public boolean editDialogueReputationRange(int index, int minReputation, int maxReputation) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), minReputation,
+            maxReputation, current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
+        return true;
+    }
+
+    public boolean editDialogueOncePerPlayer(int index, boolean oncePerPlayer) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
+            current.maxReputation(), oncePerPlayer, current.cooldownTicks(), current.priority()));
+        return true;
+    }
+
+    public boolean editDialogueCooldown(int index, int cooldownTicks) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
+            current.maxReputation(), current.oncePerPlayer(), cooldownTicks, current.priority()));
+        return true;
+    }
+
+    public boolean editDialoguePriority(int index, int priority) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
+            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), priority));
         return true;
     }
 

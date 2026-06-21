@@ -4,6 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import org.crafterscr.craftersnpc.reputation.NpcReputation;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +19,7 @@ public class NpcPlayerMemory {
     private int interactionCount;
     private int reputation;
     private long lastDialogueReputationGameTime;
+    private final Map<Integer, Long> dialogueEntryUseGameTimes = new HashMap<>();
 
     public NpcPlayerMemory(UUID playerUuid, String lastKnownName, long firstSeenGameTime) {
         this(playerUuid, lastKnownName, false, firstSeenGameTime, firstSeenGameTime, 0, NpcReputation.NEUTRAL, Long.MIN_VALUE);
@@ -74,6 +77,21 @@ public class NpcPlayerMemory {
         return lastDialogueReputationGameTime;
     }
 
+    public boolean hasUsedDialogueEntry(int index) {
+        return dialogueEntryUseGameTimes.containsKey(index);
+    }
+
+    public long ticksSinceDialogueEntryUsed(int index, long currentGameTime) {
+        Long lastUsed = dialogueEntryUseGameTimes.get(index);
+        return lastUsed == null ? -1L : Math.max(0L, currentGameTime - lastUsed);
+    }
+
+    public void markDialogueEntryUsed(int index, long gameTime) {
+        if (index >= 0) {
+            dialogueEntryUseGameTimes.put(index, gameTime);
+        }
+    }
+
     public int adjustReputation(int delta) {
         reputation = NpcReputation.clamp(reputation + delta);
         return reputation;
@@ -100,6 +118,14 @@ public class NpcPlayerMemory {
         tag.putInt("InteractionCount", interactionCount);
         tag.putInt("Reputation", reputation);
         tag.putLong("LastDialogueReputationGameTime", lastDialogueReputationGameTime);
+        net.minecraft.nbt.ListTag usedDialogueTag = new net.minecraft.nbt.ListTag();
+        for (Map.Entry<Integer, Long> entry : dialogueEntryUseGameTimes.entrySet()) {
+            CompoundTag usedTag = new CompoundTag();
+            usedTag.putInt("Index", entry.getKey());
+            usedTag.putLong("GameTime", entry.getValue());
+            usedDialogueTag.add(usedTag);
+        }
+        tag.put("UsedDialogueEntries", usedDialogueTag);
         return tag;
     }
 
@@ -117,7 +143,7 @@ public class NpcPlayerMemory {
         long lastDialogueReputationGameTime = tag.contains("LastDialogueReputationGameTime", Tag.TAG_LONG)
                 ? tag.getLong("LastDialogueReputationGameTime")
                 : Long.MIN_VALUE;
-        return Optional.of(new NpcPlayerMemory(
+        NpcPlayerMemory memory = new NpcPlayerMemory(
                 playerUuid,
                 lastKnownName,
                 greeted,
@@ -126,6 +152,15 @@ public class NpcPlayerMemory {
                 interactionCount,
                 reputation,
                 lastDialogueReputationGameTime
-        ));
+        );
+        net.minecraft.nbt.ListTag usedDialogueTag = tag.getList("UsedDialogueEntries", Tag.TAG_COMPOUND);
+        for (Tag value : usedDialogueTag) {
+            CompoundTag usedTag = (CompoundTag) value;
+            int index = usedTag.getInt("Index");
+            if (index >= 0) {
+                memory.dialogueEntryUseGameTimes.put(index, usedTag.getLong("GameTime"));
+            }
+        }
+        return Optional.of(memory);
     }
 }
