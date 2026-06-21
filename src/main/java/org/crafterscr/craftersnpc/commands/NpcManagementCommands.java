@@ -1,0 +1,145 @@
+package org.crafterscr.craftersnpc.commands;
+
+import org.crafterscr.craftersnpc.entity.*;
+import org.crafterscr.craftersnpc.dialogue.*;
+import org.crafterscr.craftersnpc.route.*;
+import org.crafterscr.craftersnpc.skin.*;
+import org.crafterscr.craftersnpc.storage.*;
+import org.crafterscr.craftersnpc.behavior.action.*;
+
+import com.mojang.brigadier.arguments.*;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.*;
+import com.mojang.brigadier.suggestion.*;
+import net.minecraft.commands.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.*;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.*;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+final class NpcManagementCommands {
+    private NpcManagementCommands() {}
+
+    static LiteralArgumentBuilder<CommandSourceStack> register() {
+        return Commands.literal("create")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .then(Commands.literal("steve").executes(ctx -> createNpc(ctx, false)))
+                        .then(Commands.literal("alex").executes(ctx -> createNpc(ctx, true))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerSkinLooked() {
+        return Commands.literal("skin")
+                .then(Commands.argument("skin", StringArgumentType.word())
+                        .suggests((ctx, builder) -> CnpcCommandSuggestions.suggestSkins(builder))
+                        .executes(ctx -> setSkinLooked(ctx, StringArgumentType.getString(ctx, "skin"))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerNpcSkin() {
+        return Commands.literal("skin")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .then(Commands.argument("skin", StringArgumentType.word())
+                                .suggests((ctx, builder) -> CnpcCommandSuggestions.suggestSkins(builder))
+                                .executes(ctx -> setSkinById(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "skin")))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerDebug() {
+        return Commands.literal("debug")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .executes(ctx -> debugNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerUnstick() {
+        return Commands.literal("unstick")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .executes(ctx -> unstickNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerRemove() {
+        return Commands.literal("remove")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .executes(ctx -> removeNpc(ctx, StringArgumentType.getString(ctx, "npcId"))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerList() {
+        return Commands.literal("list").executes(NpcManagementCommands::listNpcs);
+    }
+    static int createNpc(CommandContext<CommandSourceStack> context, boolean slimModel) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String npcId = StringArgumentType.getString(context, "npcId").toLowerCase(Locale.ROOT);
+        if (NpcRegistry.findById(player.getServer(), npcId).isPresent()) {
+            context.getSource().sendFailure(Component.literal("Ya existe un NPC con ID: " + npcId));
+            return 0;
+        }
+        CnpcEntity.spawn(player.serverLevel(), player.position(), npcId, slimModel);
+        context.getSource().sendSuccess(() -> Component.literal("CNPC creado con ID " + npcId + " y modelo " + (slimModel ? "alex" : "steve")), true);
+        return 1;
+    }
+
+    static int setSkinLooked(CommandContext<CommandSourceStack> context, String skin) throws CommandSyntaxException {
+        CnpcEntity npc = CnpcCommandUtils.requireLookedNpc(context);
+        npc.setSkinId(skin);
+        context.getSource().sendSuccess(() -> Component.literal("Skin del CNPC cambiada a: " + skin), true);
+        return 1;
+    }
+
+    static int setSkinById(CommandContext<CommandSourceStack> context, String npcId, String skin) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().setSkinId(skin);
+        context.getSource().sendSuccess(() -> Component.literal("Skin de " + npcId + " actualizada a " + skin), true);
+        return 1;
+    }
+
+    static int removeNpc(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        npc.get().discard();
+        context.getSource().sendSuccess(() -> Component.literal("NPC eliminado: " + npcId), true);
+        return 1;
+    }
+
+    static int listNpcs(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        List<String> npcIds = NpcRegistry.listNpcIds(player.getServer());
+        String ids = npcIds.isEmpty() ? "(sin NPCs)" : String.join(", ", npcIds);
+        context.getSource().sendSuccess(() -> Component.literal("NPCs: " + ids), false);
+        return 1;
+    }
+
+    static int setWand(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Debes sostener un item con la mano principal."));
+            return 0;
+        }
+        RouteWandManager.setWand(player, stack);
+        context.getSource().sendSuccess(() -> Component.literal("Wand configurada: " + RouteWandManager.getWandItemId(player)), false);
+        return 1;
+    }
+
+    static int clearWand(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        RouteWandManager.clearWand(player);
+        context.getSource().sendSuccess(() -> Component.literal("Wand removida."), false);
+        return 1;
+    }
+
+}
