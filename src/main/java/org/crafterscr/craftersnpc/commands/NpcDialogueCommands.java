@@ -6,6 +6,8 @@ import org.crafterscr.craftersnpc.route.*;
 import org.crafterscr.craftersnpc.skin.*;
 import org.crafterscr.craftersnpc.storage.*;
 import org.crafterscr.craftersnpc.behavior.action.*;
+import org.crafterscr.craftersnpc.network.OpenNpcDialogueEditorPayload;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.mojang.brigadier.arguments.*;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -55,6 +57,10 @@ final class NpcDialogueCommands {
                                         .then(Commands.literal("once").then(Commands.literal("on").executes(ctx -> editDialogueOncePerPlayer(ctx, true))).then(Commands.literal("off").executes(ctx -> editDialogueOncePerPlayer(ctx, false))))
                                         .then(Commands.literal("cooldown").then(Commands.argument("ticks", IntegerArgumentType.integer(0)).executes(NpcDialogueCommands::editDialogueCooldown)))
                                         .then(Commands.literal("priority").then(Commands.argument("priority", IntegerArgumentType.integer()).executes(NpcDialogueCommands::editDialoguePriority))))))
+                .then(Commands.literal("screen")
+                        .then(Commands.argument("npcId", StringArgumentType.word())
+                                .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                                .executes(NpcDialogueCommands::openDialogueEditor)))
                 .then(Commands.literal("remove")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                                 .suggests(CnpcCommandSuggestions::suggestNpcIds)
@@ -62,6 +68,22 @@ final class NpcDialogueCommands {
                                         .suggests(CnpcCommandSuggestions::suggestDialoguePhrases)
                                         .executes(NpcDialogueCommands::removeDialoguePhrase))));
     }
+
+    static int openDialogueEditor(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String npcId = StringArgumentType.getString(context, "npcId");
+        Optional<CnpcEntity> npc = CnpcCommandUtils.findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        List<OpenNpcDialogueEditorPayload.PlayerReputation> reputations = npc.get().playerMemories().stream()
+                .map(memory -> new OpenNpcDialogueEditorPayload.PlayerReputation(memory.lastKnownName(), memory.reputation(), memory.interactionCount(), memory.lastDialoguePhraseIndex()))
+                .toList();
+        PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueEntries(), reputations));
+        return 1;
+    }
+
     static int assignDialoguePhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         return assignDialoguePhrase(context, DialogueEntry.GENERIC_CATEGORY);
     }

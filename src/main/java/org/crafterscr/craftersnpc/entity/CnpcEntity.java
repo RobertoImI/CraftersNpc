@@ -291,6 +291,10 @@ public class CnpcEntity extends PathfinderMob {
         return List.copyOf(dialogueEntries);
     }
 
+    public java.util.Collection<NpcPlayerMemory> playerMemories() {
+        return socialController.playerMemories();
+    }
+
     public int getLastDialoguePhraseIndex() {
         return lastDialoguePhraseIndex;
     }
@@ -316,6 +320,24 @@ public class CnpcEntity extends PathfinderMob {
         if (player != null) {
             socialController.getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
         }
+    }
+
+
+    public boolean replaceDialogueEntries(List<DialogueEntry> entries) {
+        if (entries.size() > MAX_DIALOGUE_PHRASES) {
+            return false;
+        }
+        List<DialogueEntry> normalizedEntries = new ArrayList<>();
+        for (DialogueEntry entry : entries) {
+            if (entry.text().isEmpty() || entry.text().length() > MAX_DIALOGUE_PHRASE_LENGTH) {
+                return false;
+            }
+            normalizedEntries.add(entry);
+        }
+        dialogueEntries.clear();
+        dialogueEntries.addAll(normalizedEntries);
+        lastDialoguePhraseIndex = -1;
+        return true;
     }
 
     public boolean addDialoguePhrase(String phrase) {
