@@ -479,6 +479,9 @@ public class CnpcEntity extends PathfinderMob {
         } else if (lastDialoguePhraseIndex > index) {
             lastDialoguePhraseIndex--;
         }
+        for (NpcPlayerMemory memory : playerMemories.values()) {
+            memory.removeDialogueEntryIndex(index);
+        }
         return true;
     }
 

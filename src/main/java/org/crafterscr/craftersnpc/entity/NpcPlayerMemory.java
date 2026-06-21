@@ -116,6 +116,41 @@ public class NpcPlayerMemory {
         }
     }
 
+    public void removeDialogueEntryIndex(int removedIndex) {
+        if (removedIndex < 0) {
+            return;
+        }
+
+        Set<Integer> adjustedUsedOnceDialogueIndexes = new HashSet<>();
+        for (int index : usedOnceDialogueIndexes) {
+            if (index < removedIndex) {
+                adjustedUsedOnceDialogueIndexes.add(index);
+            } else if (index > removedIndex) {
+                adjustedUsedOnceDialogueIndexes.add(index - 1);
+            }
+        }
+        usedOnceDialogueIndexes.clear();
+        usedOnceDialogueIndexes.addAll(adjustedUsedOnceDialogueIndexes);
+
+        Map<Integer, Long> adjustedDialogueCooldownUntil = new HashMap<>();
+        for (Map.Entry<Integer, Long> entry : dialogueCooldownUntil.entrySet()) {
+            int index = entry.getKey();
+            if (index < removedIndex) {
+                adjustedDialogueCooldownUntil.put(index, entry.getValue());
+            } else if (index > removedIndex) {
+                adjustedDialogueCooldownUntil.put(index - 1, entry.getValue());
+            }
+        }
+        dialogueCooldownUntil.clear();
+        dialogueCooldownUntil.putAll(adjustedDialogueCooldownUntil);
+
+        if (lastDialoguePhraseIndex == removedIndex) {
+            lastDialoguePhraseIndex = -1;
+        } else if (lastDialoguePhraseIndex > removedIndex) {
+            lastDialoguePhraseIndex--;
+        }
+    }
+
     public int adjustReputation(int delta) {
         reputation = NpcReputation.clamp(reputation + delta);
         return reputation;
