@@ -5,6 +5,7 @@ import org.crafterscr.craftersnpc.dialogue.*;
 import org.crafterscr.craftersnpc.route.*;
 import org.crafterscr.craftersnpc.skin.*;
 import org.crafterscr.craftersnpc.storage.*;
+import org.crafterscr.craftersnpc.network.OpenNpcEditorPayload;
 import org.crafterscr.craftersnpc.behavior.action.*;
 
 import com.mojang.brigadier.arguments.*;
@@ -18,6 +19,7 @@ import net.minecraft.server.level.*;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.*;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -72,6 +74,19 @@ final class NpcManagementCommands {
     static LiteralArgumentBuilder<CommandSourceStack> registerList() {
         return Commands.literal("list").executes(NpcManagementCommands::listNpcs);
     }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerEdit() {
+        return Commands.literal("edit").executes(NpcManagementCommands::openEditorForLookedNpc);
+    }
+    static int openEditorForLookedNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        CnpcEntity npc = CnpcCommandUtils.requireLookedNpc(context);
+        boolean damageEnabled = NpcSettingsStorage.get(player.serverLevel()).isNpcDamageEnabled();
+        PacketDistributor.sendToPlayer(player, new OpenNpcEditorPayload(npc.getId(), npc.getNpcId(), npc.getSkinId(), npc.isSlimModel(),
+                npc.getWalkSpeed(), npc.getTemperament().id, npc.getAssignedRouteId(), npc.isNightModeOnly(), damageEnabled));
+        return 1;
+    }
+
     static int createNpc(CommandContext<CommandSourceStack> context, boolean slimModel) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String npcId = StringArgumentType.getString(context, "npcId").toLowerCase(Locale.ROOT);

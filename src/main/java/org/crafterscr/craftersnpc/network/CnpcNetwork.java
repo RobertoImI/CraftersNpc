@@ -15,6 +15,8 @@ public final class CnpcNetwork {
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToServer(WandWaitAdjustPayload.TYPE, WandWaitAdjustPayload.STREAM_CODEC, WandWaitAdjustPayload::handle);
+        registrar.playToServer(SaveNpcEditorPayload.TYPE, SaveNpcEditorPayload.STREAM_CODEC, SaveNpcEditorPayload::handle);
         registrar.playToClient(ReputationIndicatorPayload.TYPE, ReputationIndicatorPayload.STREAM_CODEC, ReputationIndicatorPayload::handle);
+        registrar.playToClient(OpenNpcEditorPayload.TYPE, OpenNpcEditorPayload.STREAM_CODEC, OpenNpcEditorPayload::handle);
     }
 }

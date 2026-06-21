@@ -13,6 +13,7 @@ public final class CnpcCommands {
             .requires(source -> source.hasPermission(2))
             .then(NpcManagementCommands.register())
             .then(NpcManagementCommands.registerSkinLooked())
+            .then(NpcManagementCommands.registerEdit())
             .then(Commands.literal("npc")
                 .then(NpcDialogueCommands.register())
                 .then(NpcManagementCommands.registerNpcSkin())
