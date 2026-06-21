@@ -16,6 +16,7 @@ import org.crafterscr.craftersnpc.dialogue.DialogueContext;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.dialogue.DialogueService;
 
+import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -945,6 +946,53 @@ public class CnpcEntity extends PathfinderMob {
         switchEffectiveRoute("");
     }
 
+    public boolean isRouteEnabledForPreset() {
+        return routeEnabled;
+    }
+
+    public List<RoutePoint> getPresetRoutePoints() {
+        return List.copyOf(route);
+    }
+
+    public List<RoutePoint> getPresetNightRefugePoints() {
+        return List.copyOf(nightRefugePoints);
+    }
+
+    public JsonObject socialConfigForPreset() {
+        return socialController.presetConfig();
+    }
+
+    public void applyPresetData(String npcId, String skinId, boolean slimModel, Temperament temperament, double walkSpeed,
+                                String assignedRouteId, boolean routeEnabled, boolean nightModeOnly, List<DialogueEntry> dialogues,
+                                List<RoutePoint> presetRoute, List<NpcScheduleEntry> scheduleEntries, List<RoutePoint> nightRefuges,
+                                JsonObject socialConfig) {
+        finishCurrentAction();
+        setNpcId(npcId);
+        setSkinId(skinId);
+        setSlimModel(slimModel);
+        setTemperament(temperament);
+        setWalkSpeed(walkSpeed);
+        setAssignedRouteId(assignedRouteId);
+        replaceDialogueEntries(dialogues);
+
+        schedule.clear();
+        for (NpcScheduleEntry entry : scheduleEntries) {
+            if (schedule.stream().noneMatch(existing -> existing.overlaps(entry))) {
+                schedule.add(entry);
+            }
+        }
+        schedule.sort(Comparator.comparingInt(NpcScheduleEntry::startTime));
+
+        route.clear();
+        route.addAll(presetRoute);
+        nightRefugePoints.clear();
+        nightRefugePoints.addAll(nightRefuges);
+        this.routeEnabled = routeEnabled || !schedule.isEmpty();
+        this.nightModeOnly = nightModeOnly;
+        switchEffectiveRoute("");
+        reengageRouteNavigation();
+    }
+
     public boolean removeScheduleEntry(int index) {
         if (index < 0 || index >= schedule.size()) {
             return false;
@@ -1391,8 +1439,8 @@ public class CnpcEntity extends PathfinderMob {
         }
     }
 
-    private record RoutePoint(Vec3 pos, int waitTicks, String actionId, Map<String, String> actionParameters) {
-        private RoutePoint(Vec3 pos, int waitTicks) {
+    public record RoutePoint(Vec3 pos, int waitTicks, String actionId, Map<String, String> actionParameters) {
+        public RoutePoint(Vec3 pos, int waitTicks) {
             this(pos, waitTicks, "", Map.of());
         }
     }

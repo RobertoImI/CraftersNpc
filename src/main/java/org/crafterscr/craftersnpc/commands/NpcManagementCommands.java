@@ -6,6 +6,7 @@ import org.crafterscr.craftersnpc.route.*;
 import org.crafterscr.craftersnpc.skin.*;
 import org.crafterscr.craftersnpc.storage.*;
 import org.crafterscr.craftersnpc.network.OpenNpcEditorPayload;
+import org.crafterscr.craftersnpc.preset.NpcPresetStorage;
 import org.crafterscr.craftersnpc.behavior.action.*;
 
 import com.mojang.brigadier.arguments.*;
@@ -21,6 +22,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.*;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -73,6 +75,20 @@ final class NpcManagementCommands {
 
     static LiteralArgumentBuilder<CommandSourceStack> registerList() {
         return Commands.literal("list").executes(NpcManagementCommands::listNpcs);
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerExport() {
+        return Commands.literal("export")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .then(Commands.argument("presetName", StringArgumentType.word())
+                                .executes(ctx -> exportNpc(ctx, StringArgumentType.getString(ctx, "npcId"), StringArgumentType.getString(ctx, "presetName")))));
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> registerImport() {
+        return Commands.literal("import")
+                .then(Commands.argument("presetName", StringArgumentType.word())
+                        .executes(ctx -> importNpc(ctx, StringArgumentType.getString(ctx, "presetName"))));
     }
 
     static LiteralArgumentBuilder<CommandSourceStack> registerEdit() {
@@ -136,6 +152,51 @@ final class NpcManagementCommands {
         String ids = npcIds.isEmpty() ? "(sin NPCs)" : String.join(", ", npcIds);
         context.getSource().sendSuccess(() -> Component.literal("NPCs: " + ids), false);
         return 1;
+    }
+
+    static int exportNpc(CommandContext<CommandSourceStack> context, String npcId, String presetName) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        try {
+            String normalizedNpcId = NpcPresetStorage.normalizeId(npcId, "El npcId");
+            String normalizedPresetName = NpcPresetStorage.normalizePresetName(presetName);
+            Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), normalizedNpcId);
+            if (npc.isEmpty()) {
+                context.getSource().sendFailure(Component.literal("NPC no encontrado: " + normalizedNpcId));
+                return 0;
+            }
+            Path path = NpcPresetStorage.save(player.getServer(), npc.get(), normalizedPresetName);
+            context.getSource().sendSuccess(() -> Component.literal("Preset exportado: " + normalizedPresetName + " -> " + path), true);
+            return 1;
+        } catch (IllegalArgumentException ex) {
+            context.getSource().sendFailure(Component.literal(ex.getMessage()));
+            return 0;
+        } catch (Exception ex) {
+            context.getSource().sendFailure(Component.literal("No se pudo exportar el preset: " + ex.getMessage()));
+            return 0;
+        }
+    }
+
+    static int importNpc(CommandContext<CommandSourceStack> context, String presetName) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        try {
+            String normalizedPresetName = NpcPresetStorage.normalizePresetName(presetName);
+            com.google.gson.JsonObject preset = NpcPresetStorage.load(player.getServer(), normalizedPresetName);
+            String npcId = NpcPresetStorage.normalizeId(preset.get("npcId").getAsString(), "El npcId");
+            if (NpcRegistry.findById(player.getServer(), npcId).isPresent()) {
+                context.getSource().sendFailure(Component.literal("Ya existe un NPC con ID: " + npcId));
+                return 0;
+            }
+            CnpcEntity npc = CnpcEntity.spawn(player.serverLevel(), player.position(), npcId, preset.get("slimModel").getAsBoolean());
+            NpcPresetStorage.apply(player.serverLevel(), npc, preset);
+            context.getSource().sendSuccess(() -> Component.literal("Preset importado como NPC: " + npcId), true);
+            return 1;
+        } catch (IllegalArgumentException ex) {
+            context.getSource().sendFailure(Component.literal(ex.getMessage()));
+            return 0;
+        } catch (Exception ex) {
+            context.getSource().sendFailure(Component.literal("No se pudo importar el preset: " + ex.getMessage()));
+            return 0;
+        }
     }
 
     static int setWand(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

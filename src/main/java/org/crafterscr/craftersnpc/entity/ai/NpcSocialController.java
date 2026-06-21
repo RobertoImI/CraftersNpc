@@ -8,6 +8,7 @@ import org.crafterscr.craftersnpc.network.ReputationIndicatorPayload;
 import org.crafterscr.craftersnpc.reputation.NpcReputation;
 import org.crafterscr.craftersnpc.reputation.ReputationReason;
 
+import com.google.gson.JsonObject;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -42,6 +43,15 @@ public class NpcSocialController {
 
     public Collection<NpcPlayerMemory> playerMemories() {
         return playerMemories.values();
+    }
+
+    public JsonObject presetConfig() {
+        JsonObject config = new JsonObject();
+        config.addProperty("exportsPlayerMemories", false);
+        config.addProperty("defaultMinReputation", NpcReputation.MIN);
+        config.addProperty("defaultMaxReputation", NpcReputation.MAX);
+        config.addProperty("dialogueRewardCooldownTicks", NpcReputation.DIALOGUE_REWARD_COOLDOWN_TICKS);
+        return config;
     }
 
     public DialogueContext createDialogueContext(NpcPlayerMemory memory) {

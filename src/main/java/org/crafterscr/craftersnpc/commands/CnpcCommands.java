@@ -25,6 +25,8 @@ public final class CnpcCommands {
                 .then(NpcManagementCommands.registerUnstick())
                 .then(NpcSettingsCommands.registerNightMode())
                 .then(NpcSettingsCommands.registerNightRefuge())
+                .then(NpcManagementCommands.registerExport())
+                .then(NpcManagementCommands.registerImport())
                 .then(NpcManagementCommands.registerRemove())
                 .then(NpcManagementCommands.registerList())
                 .then(NpcSettingsCommands.registerDamage()))
