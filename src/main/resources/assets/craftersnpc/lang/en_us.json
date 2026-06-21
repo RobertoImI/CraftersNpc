@@ -1,7 +1,5 @@
 {
-  "itemGroup.craftersnpc": "Example Mod Tab",
-  "block.craftersnpc.example_block": "Example Block",
-  "item.craftersnpc.example_item": "Example Item",
+  "itemGroup.craftersnpc": "Crafters NPC",
   "key.categories.craftersnpc": "Crafters NPC",
   "key.craftersnpc.wait_up": "Increase route point wait time",
   "key.craftersnpc.wait_down": "Decrease route point wait time"

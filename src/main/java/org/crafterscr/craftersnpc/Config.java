@@ -1,58 +1,66 @@
 package org.crafterscr.craftersnpc;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-// An example config class. This is not required, but it's a good idea to have one to keep your config organized.
-// Demonstrates how to use Neo's config APIs
 @EventBusSubscriber(modid = CraftersNpc.MODID)
 public class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
-    private static final ModConfigSpec.BooleanValue LOG_DIRT_BLOCK = BUILDER.comment("Whether to log the dirt block on common setup").define("logDirtBlock", true);
+    private static final ModConfigSpec.DoubleValue MAX_DIALOGUE_DISTANCE = BUILDER
+        .comment("Maximum distance, in blocks, from which a player can start or continue dialogue with an NPC.")
+        .defineInRange("maxDialogueDistance", 8.0D, 1.0D, 64.0D);
 
-    private static final ModConfigSpec.IntValue MAGIC_NUMBER = BUILDER.comment("A magic number").defineInRange("magicNumber", 42, 0, Integer.MAX_VALUE);
+    private static final ModConfigSpec.IntValue BASE_DIALOGUE_DURATION_TICKS = BUILDER
+        .comment("Base duration, in ticks, used for dialogue lines without a custom duration.")
+        .defineInRange("baseDialogueDurationTicks", 100, 20, 20 * 60 * 10);
 
-    public static final ModConfigSpec.ConfigValue<String> MAGIC_NUMBER_INTRODUCTION = BUILDER.comment("What you want the introduction message to be for the magic number").define("magicNumberIntroduction", "The magic number is... ");
+    private static final ModConfigSpec.BooleanValue DEFAULT_DAMAGE_ALLOWED = BUILDER
+        .comment("Whether NPCs can receive damage by default before per-NPC settings are applied.")
+        .define("defaultDamageAllowed", false);
 
-    // a list of strings that are treated as resource locations for items
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> ITEM_STRINGS = BUILDER.comment("A list of items to log on common setup.").defineListAllowEmpty("items", List.of("minecraft:iron_ingot"), Config::validateItemName);
+    private static final ModConfigSpec.IntValue MAX_NPCS_PER_WORLD = BUILDER
+        .comment("Maximum number of Crafters NPCs allowed in a single world.")
+        .defineInRange("maxNpcsPerWorld", 256, 1, 10_000);
+
+    private static final ModConfigSpec.IntValue MAX_NPCS_PER_CHUNK = BUILDER
+        .comment("Maximum number of Crafters NPCs allowed in a single chunk.")
+        .defineInRange("maxNpcsPerChunk", 16, 1, 256);
+
+    private static final ModConfigSpec.IntValue MAX_ROUTES_PER_WORLD = BUILDER
+        .comment("Maximum number of named NPC routes stored per world.")
+        .defineInRange("maxRoutesPerWorld", 128, 1, 10_000);
+
+    private static final ModConfigSpec.IntValue MAX_ROUTE_POINTS = BUILDER
+        .comment("Maximum number of points allowed in a single NPC route.")
+        .defineInRange("maxRoutePoints", 64, 1, 1_024);
+
+    private static final ModConfigSpec.BooleanValue REPUTATION_ENABLED = BUILDER
+        .comment("Whether NPC reputation tracking and indicators are enabled.")
+        .define("reputationEnabled", true);
 
     static final ModConfigSpec SPEC = BUILDER.build();
 
-    public static boolean logDirtBlock;
-    public static int magicNumber;
-    public static String magicNumberIntroduction;
-    public static Set<Item> items;
-
-    private static boolean validateItemName(final Object obj) {
-        if (!(obj instanceof String itemName)) {
-            return false;
-        }
-        ResourceLocation itemId = ResourceLocation.tryParse(itemName);
-        return itemId != null && BuiltInRegistries.ITEM.containsKey(itemId);
-    }
+    public static double maxDialogueDistance;
+    public static int baseDialogueDurationTicks;
+    public static boolean defaultDamageAllowed;
+    public static int maxNpcsPerWorld;
+    public static int maxNpcsPerChunk;
+    public static int maxRoutesPerWorld;
+    public static int maxRoutePoints;
+    public static boolean reputationEnabled;
 
     @SubscribeEvent
     static void onLoad(final ModConfigEvent event) {
-        logDirtBlock = LOG_DIRT_BLOCK.get();
-        magicNumber = MAGIC_NUMBER.get();
-        magicNumberIntroduction = MAGIC_NUMBER_INTRODUCTION.get();
-
-        // convert the list of strings into a set of items
-        items = ITEM_STRINGS.get().stream()
-            .map(ResourceLocation::tryParse)
-            .filter(itemId -> itemId != null && BuiltInRegistries.ITEM.containsKey(itemId))
-            .map(BuiltInRegistries.ITEM::get)
-            .collect(Collectors.toSet());
+        maxDialogueDistance = MAX_DIALOGUE_DISTANCE.get();
+        baseDialogueDurationTicks = BASE_DIALOGUE_DURATION_TICKS.get();
+        defaultDamageAllowed = DEFAULT_DAMAGE_ALLOWED.get();
+        maxNpcsPerWorld = MAX_NPCS_PER_WORLD.get();
+        maxNpcsPerChunk = MAX_NPCS_PER_CHUNK.get();
+        maxRoutesPerWorld = MAX_ROUTES_PER_WORLD.get();
+        maxRoutePoints = MAX_ROUTE_POINTS.get();
+        reputationEnabled = REPUTATION_ENABLED.get();
     }
 }
