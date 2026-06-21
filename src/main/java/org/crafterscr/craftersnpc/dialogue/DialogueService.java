@@ -1,6 +1,7 @@
 package org.crafterscr.craftersnpc.dialogue;
 
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
+import org.crafterscr.craftersnpc.entity.NpcPlayerMemory;
 
 import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
@@ -20,31 +21,35 @@ public final class DialogueService {
     }
 
     public static boolean startConversation(CnpcEntity npc, ServerPlayer player) {
-        return startConversation(npc, player, DialogueContext.generic());
+        return startConversation(npc, player, DialogueContext.generic(), null);
     }
 
     public static boolean startConversation(CnpcEntity npc, ServerPlayer player, DialogueContext context) {
+        return startConversation(npc, player, context, null);
+    }
+
+    public static boolean startConversation(CnpcEntity npc, ServerPlayer player, DialogueContext context, NpcPlayerMemory memory) {
         List<DialogueEntry> entries = npc.getDialogueEntries();
         if (entries.isEmpty()) {
             return false;
         }
 
-        int phraseIndex = selectPhraseIndex(npc, entries, context);
+        int phraseIndex = selectPhraseIndex(npc, entries, context, memory);
         if (phraseIndex < 0) {
             return false;
         }
 
         DialogueEntry entry = entries.get(phraseIndex);
         int duration = durationTicks(entry.text());
-        npc.markDialogueEntryUsed(phraseIndex, player);
+        npc.markDialogueEntryUsed(phraseIndex, entry.cooldownTicks(), player);
         npc.startDialogue(entry.text(), duration, player);
         return true;
     }
 
-    private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context) {
-        CandidatePool exactCandidates = collectCandidates(npc, entries, context, false);
+    private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, NpcPlayerMemory memory) {
+        CandidatePool exactCandidates = collectCandidates(npc, entries, context, memory, false);
         CandidatePool candidates = exactCandidates.isEmpty()
-            ? collectCandidates(npc, entries, context, true)
+            ? collectCandidates(npc, entries, context, memory, true)
             : exactCandidates;
         if (candidates.isEmpty()) {
             return -1;
@@ -52,14 +57,18 @@ public final class DialogueService {
         return selectWeightedCandidate(npc, entries, candidates);
     }
 
-    private static CandidatePool collectCandidates(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, boolean genericOnly) {
+    private static CandidatePool collectCandidates(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, NpcPlayerMemory memory, boolean genericOnly) {
         List<Integer> candidates = new ArrayList<>();
         int totalWeight = 0;
         int bestPriority = Integer.MIN_VALUE;
-        int lastPhraseIndex = npc.getLastDialoguePhraseIndex();
+        int lastPhraseIndex = memory == null ? npc.getLastDialoguePhraseIndex() : memory.lastDialoguePhraseIndex();
         for (int index = 0; index < entries.size(); index++) {
             DialogueEntry entry = entries.get(index);
             if (index == lastPhraseIndex && entries.size() > 1) {
+                continue;
+            }
+            long gameTime = npc.level().getGameTime();
+            if (memory != null && ((entry.oncePerPlayer() && memory.hasUsedOnceDialogueEntry(index)) || memory.isDialogueOnCooldown(index, gameTime))) {
                 continue;
             }
             DialogueContext entryContext = npc.withDialogueEntryState(context, index);

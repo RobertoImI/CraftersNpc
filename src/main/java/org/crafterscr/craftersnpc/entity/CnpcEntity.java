@@ -182,7 +182,7 @@ public class CnpcEntity extends PathfinderMob {
 
         NpcPlayerMemory memory = getOrCreatePlayerMemory(serverPlayer);
         DialogueContext context = createDialogueContext(memory);
-        if (DialogueService.startConversation(this, serverPlayer, context)) {
+        if (DialogueService.startConversation(this, serverPlayer, context, memory)) {
             maybeRewardDialogueReputation(serverPlayer, memory);
             memory.recordInteraction(serverPlayer.getGameProfile().getName(), level().getGameTime());
             return InteractionResult.CONSUME;
@@ -375,10 +375,10 @@ public class CnpcEntity extends PathfinderMob {
         return context.withDialogueEntryState(memory.hasUsedDialogueEntry(index), memory.ticksSinceDialogueEntryUsed(index, gameTime));
     }
 
-    public void markDialogueEntryUsed(int index, ServerPlayer player) {
+    public void markDialogueEntryUsed(int index, int cooldownTicks, ServerPlayer player) {
         setLastDialoguePhraseIndex(index);
         if (player != null) {
-            getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, level().getGameTime());
+            getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
         }
     }
 
