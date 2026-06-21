@@ -86,6 +86,9 @@ public final class CnpcCommands {
                                 .then(Commands.literal("weight")
                                     .then(Commands.argument("weight", IntegerArgumentType.integer(1, 10_000))
                                         .executes(CnpcCommands::editDialogueWeight)))
+                                .then(Commands.literal("category")
+                                    .then(Commands.argument("category", StringArgumentType.word())
+                                        .executes(CnpcCommands::editDialogueCategory)))
                                 .then(Commands.literal("reputation")
                                     .then(Commands.argument("min", IntegerArgumentType.integer(-100, 100))
                                         .then(Commands.argument("max", IntegerArgumentType.integer(-100, 100))
@@ -700,6 +703,24 @@ public final class CnpcCommands {
         return editDialogueMetadata(context, "peso", npc -> npc.editDialogueWeight(
             IntegerArgumentType.getInteger(context, "phrase") - 1,
             IntegerArgumentType.getInteger(context, "weight")));
+    }
+
+    private static int editDialogueCategory(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
+        String category = DialogueEntry.normalizeCategory(StringArgumentType.getString(context, "category"));
+        Optional<CnpcEntity> npc = findNpc(context, npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId + "; categoría no actualizada a " + category + "."));
+            return 0;
+        }
+        if (!npc.get().editDialogueCategory(phraseIndex, category)) {
+            context.getSource().sendFailure(Component.literal("Índice de frase inválido; categoría no actualizada a " + category + "."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase #" + (phraseIndex + 1) + ": categoría actualizada a "
+            + category + " en " + npcId + "."), true);
+        return 1;
     }
 
     private static int editDialogueReputationRange(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

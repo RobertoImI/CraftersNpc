@@ -419,6 +419,16 @@ public class CnpcEntity extends PathfinderMob {
         return true;
     }
 
+    public boolean editDialogueCategory(int index, String category) {
+        if (index < 0 || index >= dialogueEntries.size()) {
+            return false;
+        }
+        DialogueEntry current = dialogueEntries.get(index);
+        dialogueEntries.set(index, new DialogueEntry(current.text(), DialogueEntry.normalizeCategory(category), current.weight(), current.minReputation(),
+            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
+        return true;
+    }
+
     public boolean editDialogueReputationRange(int index, int minReputation, int maxReputation) {
         if (index < 0 || index >= dialogueEntries.size()) {
             return false;
