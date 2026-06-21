@@ -531,7 +531,8 @@ public class CnpcEntity extends PathfinderMob {
             }
             if (distanceToSqr(player) <= 4.0D && reactiveAttackCooldown <= 0) {
                 swing(InteractionHand.MAIN_HAND);
-                player.hurt(damageSources().playerAttack(player), 1.0F);
+                float attackDamage = (float) getAttributeValue(Attributes.ATTACK_DAMAGE);
+                player.hurt(damageSources().mobAttack(this), attackDamage);
                 reactiveAttackCooldown = 15;
             }
         } else if (reactionState == ReactionState.FLEEING) {
