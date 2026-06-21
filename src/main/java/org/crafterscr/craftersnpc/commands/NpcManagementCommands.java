@@ -83,7 +83,7 @@ final class NpcManagementCommands {
         CnpcEntity npc = CnpcCommandUtils.requireLookedNpc(context);
         boolean damageEnabled = NpcSettingsStorage.get(player.serverLevel()).isNpcDamageEnabled();
         PacketDistributor.sendToPlayer(player, new OpenNpcEditorPayload(npc.getId(), npc.getNpcId(), npc.getSkinId(), npc.isSlimModel(),
-                npc.getWalkSpeed(), npc.getTemperament().id, npc.getAssignedRouteId(), npc.isNightModeOnly(), damageEnabled));
+                npc.getWalkSpeed(), npc.getTemperament().id(), npc.getAssignedRouteId(), npc.isNightModeOnly(), damageEnabled));
         return 1;
     }
 

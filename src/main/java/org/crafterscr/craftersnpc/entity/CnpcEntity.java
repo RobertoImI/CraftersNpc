@@ -1354,6 +1354,10 @@ public class CnpcEntity extends PathfinderMob {
             this.id = id;
         }
 
+        public String id() {
+            return id;
+        }
+
         public static Temperament fromId(String value) {
             String normalized = value == null ? "" : value.toLowerCase(Locale.ROOT);
             for (Temperament temperament : values()) {

@@ -60,7 +60,7 @@ public class NpcEditorScreen extends Screen {
         addRenderableWidget(slimModel);
         addRenderableWidget(nightMode);
         addRenderableWidget(damageEnabled);
-        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id), b -> cycleTemperament(b)).bounds(x + 135, y + 104, 130, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id()), b -> cycleTemperament(b)).bounds(x + 135, y + 104, 130, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, y + 145, 100, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, y + 145, 100, 20).build());
     }
@@ -74,7 +74,7 @@ public class NpcEditorScreen extends Screen {
     private void cycleTemperament(Button button) {
         CnpcEntity.Temperament[] values = CnpcEntity.Temperament.values();
         temperament = values[(temperament.ordinal() + 1) % values.length];
-        button.setMessage(Component.literal("Temperamento: " + temperament.id));
+        button.setMessage(Component.literal("Temperamento: " + temperament.id()));
     }
 
     private void save() {
@@ -85,7 +85,7 @@ public class NpcEditorScreen extends Screen {
             parsedSpeed = CnpcEntity.DEFAULT_WALK_SPEED;
         }
         PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), skinId.getValue(), slimModel.selected(), parsedSpeed,
-                temperament.id, routeId.getValue(), nightMode.selected(), damageEnabled.selected()));
+                temperament.id(), routeId.getValue(), nightMode.selected(), damageEnabled.selected()));
         onClose();
     }
 
