@@ -7,6 +7,7 @@ import org.crafterscr.craftersnpc.entity.ai.NpcReactionController;
 import org.crafterscr.craftersnpc.entity.ai.NpcRouteController;
 import org.crafterscr.craftersnpc.entity.ai.NpcSocialController;
 import org.crafterscr.craftersnpc.reputation.ReputationReason;
+import org.crafterscr.craftersnpc.storage.NpcDataMigrations;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
@@ -1162,6 +1163,7 @@ public class CnpcEntity extends PathfinderMob {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        NpcDataMigrations.writeCurrentVersion(tag);
         tag.putString("Skin", getSkinId());
         tag.putString("NpcId", getNpcId());
         tag.putString("RouteId", getAssignedRouteId());
@@ -1224,6 +1226,7 @@ public class CnpcEntity extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        NpcDataMigrations.migrateEntityData(tag);
         setSkinId(tag.contains("Skin", Tag.TAG_STRING) ? tag.getString("Skin") : "steve");
         setNpcId(tag.contains("NpcId", Tag.TAG_STRING) ? tag.getString("NpcId") : "");
         setAssignedRouteId(tag.contains("RouteId", Tag.TAG_STRING) ? tag.getString("RouteId") : "");

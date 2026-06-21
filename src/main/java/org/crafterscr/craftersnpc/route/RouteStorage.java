@@ -1,5 +1,7 @@
 package org.crafterscr.craftersnpc.route;
 
+import org.crafterscr.craftersnpc.storage.NpcDataMigrations;
+
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -93,6 +95,8 @@ public class RouteStorage extends SavedData {
 
     public static RouteStorage load(CompoundTag tag, HolderLookup.Provider registries) {
         RouteStorage storage = new RouteStorage();
+        boolean migrated = NpcDataMigrations.needsMigration(tag);
+        NpcDataMigrations.migrateRouteStorageData(tag);
         CompoundTag routesTag = tag.getCompound("Routes");
         for (String key : routesTag.getAllKeys()) {
             ListTag points = routesTag.getList(key, Tag.TAG_COMPOUND);
@@ -103,11 +107,15 @@ public class RouteStorage extends SavedData {
             }
             storage.routes.put(key.toLowerCase(Locale.ROOT), routePoints);
         }
+        if (migrated) {
+            storage.setDirty();
+        }
         return storage;
     }
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        NpcDataMigrations.writeCurrentVersion(tag);
         CompoundTag routesTag = new CompoundTag();
         routes.forEach((key, value) -> {
             ListTag points = new ListTag();

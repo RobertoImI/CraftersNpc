@@ -16,14 +16,20 @@ public class NpcSettingsStorage extends SavedData {
 
     public static NpcSettingsStorage load(CompoundTag tag, HolderLookup.Provider registries) {
         NpcSettingsStorage storage = new NpcSettingsStorage();
+        boolean migrated = NpcDataMigrations.needsMigration(tag);
+        NpcDataMigrations.migrateNpcSettingsData(tag);
         if (tag.contains("NpcDamageEnabled")) {
             storage.npcDamageEnabled = tag.getBoolean("NpcDamageEnabled");
+        }
+        if (migrated) {
+            storage.setDirty();
         }
         return storage;
     }
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        NpcDataMigrations.writeCurrentVersion(tag);
         tag.putBoolean("NpcDamageEnabled", npcDamageEnabled);
         return tag;
     }
