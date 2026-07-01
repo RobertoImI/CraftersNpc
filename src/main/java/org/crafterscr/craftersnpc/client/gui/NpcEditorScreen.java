@@ -12,6 +12,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 public class NpcEditorScreen extends Screen {
@@ -19,31 +21,44 @@ public class NpcEditorScreen extends Screen {
     private final boolean initialSlimModel;
     private final boolean initialNightMode;
     private final boolean initialDamageEnabled;
+    private final List<String> skinOptions;
+    private final List<String> routeOptions;
     private EditBox npcId;
-    private EditBox skinId;
+    private String skinId;
     private EditBox speed;
-    private EditBox routeId;
+    private String routeId;
     private Checkbox slimModel;
     private Checkbox nightMode;
-    private Checkbox damageEnabled;
     private CnpcEntity.Temperament temperament;
+    private Button skinButton;
+    private Button routeButton;
 
     public NpcEditorScreen(int entityId, String npcId, String skinId, boolean slimModel, double speed,
-                           String temperament, String routeId, boolean nightMode, boolean damageEnabled) {
+                           String temperament, String routeId, boolean nightMode, boolean damageEnabled,
+                           List<String> skinIds, List<String> routeIds) {
         super(Component.literal("Editor de NPC"));
         this.entityId = entityId;
         this.initialSlimModel = slimModel;
         this.initialNightMode = nightMode;
         this.temperament = CnpcEntity.Temperament.fromId(temperament);
         this.initialDamageEnabled = damageEnabled;
+        this.skinId = skinId == null || skinId.isBlank() ? "steve" : skinId;
+        this.routeId = routeId == null ? "" : routeId;
+        this.skinOptions = optionsWithCurrent(this.skinId, skinIds, false);
+        this.routeOptions = optionsWithCurrent(this.routeId, routeIds, true);
         this.npcId = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Id"));
         this.npcId.setValue(npcId);
-        this.skinId = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Skin"));
-        this.skinId.setValue(skinId);
         this.speed = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Velocidad"));
         this.speed.setValue(String.format(Locale.ROOT, "%.2f", speed));
-        this.routeId = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Ruta"));
-        this.routeId.setValue(routeId);
+    }
+
+    private static List<String> optionsWithCurrent(String current, List<String> values, boolean includeEmpty) {
+        List<String> options = new ArrayList<>();
+        if (includeEmpty) options.add("");
+        if (current != null && !current.isBlank()) options.add(current);
+        for (String value : values) if (value != null && !options.contains(value)) options.add(value);
+        if (options.isEmpty()) options.add(includeEmpty ? "" : "steve");
+        return options;
     }
 
     @Override
@@ -51,25 +66,25 @@ public class NpcEditorScreen extends Screen {
         int x = width / 2 - 110;
         int y = height / 2 - 105;
         addLabeledBox(npcId, x, y + 14);
-        addLabeledBox(skinId, x, y + 44);
+        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 44, 120, 20).build();
+        addRenderableWidget(skinButton);
         addLabeledBox(speed, x, y + 74);
-        addLabeledBox(routeId, x, y + 104);
+        routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 104, 120, 20).build();
+        addRenderableWidget(routeButton);
         slimModel = Checkbox.builder(Component.literal("Modelo slim"), font).pos(x + 135, y + 14).selected(this.slimModel == null ? initialSlimModel : this.slimModel.selected()).build();
         nightMode = Checkbox.builder(Component.literal("Modo nocturno"), font).pos(x + 135, y + 44).selected(this.nightMode == null ? initialNightMode : this.nightMode.selected()).build();
-        damageEnabled = Checkbox.builder(Component.literal("Daño habilitado"), font).pos(x + 135, y + 74).selected(damageEnabled == null ? initialDamageEnabled : damageEnabled.selected()).build();
         addRenderableWidget(slimModel);
         addRenderableWidget(nightMode);
-        addRenderableWidget(damageEnabled);
-        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id()), b -> cycleTemperament(b)).bounds(x + 135, y + 104, 130, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id()), b -> cycleTemperament(b)).bounds(x + 135, y + 74, 130, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, y + 145, 100, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, y + 145, 100, 20).build());
     }
 
-    private void addLabeledBox(EditBox box, int x, int y) {
-        box.setX(x);
-        box.setY(y);
-        addRenderableWidget(box);
-    }
+    private void addLabeledBox(EditBox box, int x, int y) { box.setX(x); box.setY(y); addRenderableWidget(box); }
+    private String displayValue(String value, String emptyLabel) { return value == null || value.isBlank() ? emptyLabel : value; }
+    private void cycleSkin() { skinId = nextOption(skinOptions, skinId); skinButton.setMessage(Component.literal(displayValue(skinId, "(sin skin)"))); }
+    private void cycleRoute() { routeId = nextOption(routeOptions, routeId); routeButton.setMessage(Component.literal(displayValue(routeId, "(sin ruta)"))); }
+    private String nextOption(List<String> options, String current) { return options.get((Math.max(0, options.indexOf(current)) + 1) % options.size()); }
 
     private void cycleTemperament(Button button) {
         CnpcEntity.Temperament[] values = CnpcEntity.Temperament.values();
@@ -79,13 +94,9 @@ public class NpcEditorScreen extends Screen {
 
     private void save() {
         double parsedSpeed;
-        try {
-            parsedSpeed = Double.parseDouble(speed.getValue());
-        } catch (NumberFormatException ignored) {
-            parsedSpeed = CnpcEntity.DEFAULT_WALK_SPEED;
-        }
-        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), skinId.getValue(), slimModel.selected(), parsedSpeed,
-                temperament.id(), routeId.getValue(), nightMode.selected(), damageEnabled.selected()));
+        try { parsedSpeed = Double.parseDouble(speed.getValue()); } catch (NumberFormatException ignored) { parsedSpeed = CnpcEntity.DEFAULT_WALK_SPEED; }
+        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), skinId, slimModel.selected(), parsedSpeed,
+                temperament.id(), routeId, nightMode.selected(), initialDamageEnabled));
         onClose();
     }
 

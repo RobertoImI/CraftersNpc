@@ -2,7 +2,6 @@ package org.crafterscr.craftersnpc.entity;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import org.crafterscr.craftersnpc.reputation.NpcReputation;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,14 +18,12 @@ public class NpcPlayerMemory {
     private final long firstSeenGameTime;
     private long lastInteractionGameTime;
     private int interactionCount;
-    private int reputation;
-    private long lastDialogueReputationGameTime;
     private int lastDialoguePhraseIndex = -1;
     private final Set<Integer> usedOnceDialogueIndexes = new HashSet<>();
     private final Map<Integer, Long> dialogueCooldownUntil = new HashMap<>();
 
     public NpcPlayerMemory(UUID playerUuid, String lastKnownName, long firstSeenGameTime) {
-        this(playerUuid, lastKnownName, false, firstSeenGameTime, firstSeenGameTime, 0, NpcReputation.NEUTRAL, Long.MIN_VALUE);
+        this(playerUuid, lastKnownName, false, firstSeenGameTime, firstSeenGameTime, 0);
     }
 
     private NpcPlayerMemory(
@@ -35,9 +32,7 @@ public class NpcPlayerMemory {
             boolean greeted,
             long firstSeenGameTime,
             long lastInteractionGameTime,
-            int interactionCount,
-            int reputation,
-            long lastDialogueReputationGameTime
+            int interactionCount
     ) {
         this.playerUuid = playerUuid;
         this.lastKnownName = lastKnownName == null ? "" : lastKnownName;
@@ -45,8 +40,6 @@ public class NpcPlayerMemory {
         this.firstSeenGameTime = firstSeenGameTime;
         this.lastInteractionGameTime = lastInteractionGameTime;
         this.interactionCount = Math.max(0, interactionCount);
-        this.reputation = NpcReputation.clamp(reputation);
-        this.lastDialogueReputationGameTime = lastDialogueReputationGameTime;
     }
 
     public UUID playerUuid() {
@@ -71,14 +64,6 @@ public class NpcPlayerMemory {
 
     public int interactionCount() {
         return interactionCount;
-    }
-
-    public int reputation() {
-        return reputation;
-    }
-
-    public long lastDialogueReputationGameTime() {
-        return lastDialogueReputationGameTime;
     }
 
     public int lastDialoguePhraseIndex() {
@@ -151,15 +136,6 @@ public class NpcPlayerMemory {
         }
     }
 
-    public int adjustReputation(int delta) {
-        reputation = NpcReputation.clamp(reputation + delta);
-        return reputation;
-    }
-
-    public void markDialogueReputationRewarded(long gameTime) {
-        lastDialogueReputationGameTime = gameTime;
-    }
-
     public void recordInteraction(String playerName, long gameTime) {
         greeted = true;
         lastKnownName = playerName == null ? "" : playerName;
@@ -175,8 +151,6 @@ public class NpcPlayerMemory {
         tag.putLong("FirstSeenGameTime", firstSeenGameTime);
         tag.putLong("LastInteractionGameTime", lastInteractionGameTime);
         tag.putInt("InteractionCount", interactionCount);
-        tag.putInt("Reputation", reputation);
-        tag.putLong("LastDialogueReputationGameTime", lastDialogueReputationGameTime);
         tag.putInt("LastDialoguePhraseIndex", lastDialoguePhraseIndex);
         net.minecraft.nbt.ListTag usedOnceTag = new net.minecraft.nbt.ListTag();
         for (int index : usedOnceDialogueIndexes) {
@@ -206,19 +180,13 @@ public class NpcPlayerMemory {
         long firstSeenGameTime = tag.getLong("FirstSeenGameTime");
         long lastInteractionGameTime = tag.getLong("LastInteractionGameTime");
         int interactionCount = tag.getInt("InteractionCount");
-        int reputation = tag.contains("Reputation", Tag.TAG_INT) ? tag.getInt("Reputation") : NpcReputation.NEUTRAL;
-        long lastDialogueReputationGameTime = tag.contains("LastDialogueReputationGameTime", Tag.TAG_LONG)
-                ? tag.getLong("LastDialogueReputationGameTime")
-                : Long.MIN_VALUE;
         NpcPlayerMemory memory = new NpcPlayerMemory(
                 playerUuid,
                 lastKnownName,
                 greeted,
                 firstSeenGameTime,
                 lastInteractionGameTime,
-                interactionCount,
-                reputation,
-                lastDialogueReputationGameTime
+                interactionCount
         );
         memory.lastDialoguePhraseIndex = tag.contains("LastDialoguePhraseIndex", Tag.TAG_INT) ? tag.getInt("LastDialoguePhraseIndex") : -1;
         net.minecraft.nbt.ListTag usedOnceTag = tag.getList("UsedOnceDialogueIndexes", Tag.TAG_COMPOUND);

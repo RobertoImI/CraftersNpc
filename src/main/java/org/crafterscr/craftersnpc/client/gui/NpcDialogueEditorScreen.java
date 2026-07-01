@@ -15,6 +15,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.util.FormattedCharSequence;
+
 public class NpcDialogueEditorScreen extends Screen {
     private final int entityId;
     private final String npcId;
@@ -23,7 +25,7 @@ public class NpcDialogueEditorScreen extends Screen {
     private int selectedIndex;
     private int scroll;
     private String bankValue = "";
-    private EditBox bank;
+    private Button bankButton;
     private EditBox text;
 
     public NpcDialogueEditorScreen(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds) {
@@ -40,8 +42,8 @@ public class NpcDialogueEditorScreen extends Screen {
         int left = 18;
         int editorX = width / 2 + 8;
         int top = 34;
-        bank = box(editorX, top, 210, "Banco");
-        bank.setValue(bankValue);
+        bankButton = Button.builder(Component.literal(displayBank()), b -> cycleBank()).bounds(editorX, top, 210, 20).build();
+        addRenderableWidget(bankButton);
         text = box(editorX, top + 34, 210, "Texto");
         addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 68, 70, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 68, 64, 20).build());
@@ -68,12 +70,23 @@ public class NpcDialogueEditorScreen extends Screen {
         text.setValue(entries.get(selectedIndex).text());
     }
 
+    private String displayBank() { return bankValue == null || bankValue.isBlank() ? "Banco: (sin banco)" : "Banco: " + bankValue; }
+
+    private void cycleBank() {
+        List<String> options = new ArrayList<>();
+        options.add("");
+        for (String bankId : bankIds) if (!options.contains(bankId)) options.add(bankId);
+        int index = Math.max(0, options.indexOf(bankValue));
+        bankValue = options.get((index + 1) % options.size());
+        bankButton.setMessage(Component.literal(displayBank()));
+    }
+
     private DialogueEntry editorEntry() { return new DialogueEntry(text.getValue()); }
     private void applyEditor() { if (!entries.isEmpty()) entries.set(selectedIndex, editorEntry()); }
     private void addEntry() { if (entries.size() < CnpcEntity.MAX_DIALOGUE_PHRASES && !DialogueEntry.normalizeText(text.getValue()).isEmpty()) { entries.add(editorEntry()); selectedIndex = entries.size() - 1; loadSelected(); } }
     private void deleteEntry() { if (!entries.isEmpty()) { entries.remove(selectedIndex); selectedIndex = Math.max(0, selectedIndex - 1); loadSelected(); } }
     private void moveSelected(int delta) { int to = selectedIndex + delta; if (to >= 0 && to < entries.size()) { entries.add(to, entries.remove(selectedIndex)); selectedIndex = to; } }
-    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, bank.getValue(), entries)); onClose(); }
+    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, bankValue, entries)); onClose(); }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -106,7 +119,9 @@ public class NpcDialogueEditorScreen extends Screen {
             DialogueEntry entry = entries.get(index);
             int rowY = y + i * 24;
             graphics.fill(listX, rowY, listX + listW, rowY + 22, index == selectedIndex ? 0x80336699 : 0x80202020);
-            graphics.drawString(font, "#" + (index + 1) + " " + entry.text(), listX + 4, rowY + 7, 0xFFFFFF);
+            List<FormattedCharSequence> lines = font.split(Component.literal("#" + (index + 1) + " " + entry.text()), listW - 8);
+            if (!lines.isEmpty()) graphics.drawString(font, lines.get(0), listX + 4, rowY + 2, 0xFFFFFF);
+            if (lines.size() > 1) graphics.drawString(font, lines.get(1), listX + 4, rowY + 12, 0xDDDDDD);
         }
     }
 }

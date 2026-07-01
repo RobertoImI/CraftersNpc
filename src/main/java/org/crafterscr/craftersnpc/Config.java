@@ -37,10 +37,6 @@ public class Config {
         .comment("Maximum number of points allowed in a single NPC route.")
         .defineInRange("maxRoutePoints", 64, 1, 1_024);
 
-    private static final ModConfigSpec.BooleanValue REPUTATION_ENABLED = BUILDER
-        .comment("Whether NPC reputation tracking and indicators are enabled.")
-        .define("reputationEnabled", true);
-
     static final ModConfigSpec SPEC = BUILDER.build();
 
     public static double maxDialogueDistance;
@@ -50,8 +46,6 @@ public class Config {
     public static int maxNpcsPerChunk;
     public static int maxRoutesPerWorld;
     public static int maxRoutePoints;
-    public static boolean reputationEnabled;
-
     @SubscribeEvent
     static void onLoad(final ModConfigEvent event) {
         maxDialogueDistance = MAX_DIALOGUE_DISTANCE.get();
@@ -60,7 +54,5 @@ public class Config {
         maxNpcsPerWorld = MAX_NPCS_PER_WORLD.get();
         maxNpcsPerChunk = MAX_NPCS_PER_CHUNK.get();
         maxRoutesPerWorld = MAX_ROUTES_PER_WORLD.get();
-        maxRoutePoints = MAX_ROUTE_POINTS.get();
-        reputationEnabled = REPUTATION_ENABLED.get();
-    }
+        maxRoutePoints = MAX_ROUTE_POINTS.get();    }
 }

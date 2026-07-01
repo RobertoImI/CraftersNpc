@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, boolean slimModel, double speed,
-                                   String temperament, String routeId, boolean nightMode, boolean damageEnabled) implements CustomPacketPayload {
+                                   String temperament, String routeId, boolean nightMode, boolean damageEnabled, java.util.List<String> skinIds, java.util.List<String> routeIds) implements CustomPacketPayload {
     public static final Type<OpenNpcEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "open_npc_editor"));
     public static final StreamCodec<FriendlyByteBuf, OpenNpcEditorPayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
@@ -24,9 +24,29 @@ public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, bo
                 buf.writeUtf(payload.routeId(), 64);
                 buf.writeBoolean(payload.nightMode());
                 buf.writeBoolean(payload.damageEnabled());
+                buf.writeVarInt(payload.skinIds().size());
+                for (String skinId : payload.skinIds()) buf.writeUtf(skinId, 64);
+                buf.writeVarInt(payload.routeIds().size());
+                for (String routeId : payload.routeIds()) buf.writeUtf(routeId, 64);
             },
-            buf -> new OpenNpcEditorPayload(buf.readInt(), buf.readUtf(64), buf.readUtf(64), buf.readBoolean(), buf.readDouble(),
-                    buf.readUtf(32), buf.readUtf(64), buf.readBoolean(), buf.readBoolean())
+            buf -> {
+                int entityId = buf.readInt();
+                String npcId = buf.readUtf(64);
+                String skinId = buf.readUtf(64);
+                boolean slimModel = buf.readBoolean();
+                double speed = buf.readDouble();
+                String temperament = buf.readUtf(32);
+                String routeId = buf.readUtf(64);
+                boolean nightMode = buf.readBoolean();
+                boolean damageEnabled = buf.readBoolean();
+                int skinSize = Math.min(buf.readVarInt(), 512);
+                java.util.List<String> skinIds = new java.util.ArrayList<>(skinSize);
+                for (int index = 0; index < skinSize; index++) skinIds.add(buf.readUtf(64));
+                int routeSize = Math.min(buf.readVarInt(), 512);
+                java.util.List<String> routeIds = new java.util.ArrayList<>(routeSize);
+                for (int index = 0; index < routeSize; index++) routeIds.add(buf.readUtf(64));
+                return new OpenNpcEditorPayload(entityId, npcId, skinId, slimModel, speed, temperament, routeId, nightMode, damageEnabled, skinIds, routeIds);
+            }
     );
 
     @Override
@@ -36,6 +56,6 @@ public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, bo
 
     public static void handle(OpenNpcEditorPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcEditorScreen(payload.entityId(), payload.npcId(), payload.skinId(),
-                payload.slimModel(), payload.speed(), payload.temperament(), payload.routeId(), payload.nightMode(), payload.damageEnabled())));
+                payload.slimModel(), payload.speed(), payload.temperament(), payload.routeId(), payload.nightMode(), payload.damageEnabled(), payload.skinIds(), payload.routeIds())));
     }
 }

@@ -92,14 +92,18 @@ final class NpcManagementCommands {
     }
 
     static LiteralArgumentBuilder<CommandSourceStack> registerEdit() {
-        return Commands.literal("edit").executes(NpcManagementCommands::openEditorForLookedNpc);
+        return Commands.literal("edit")
+                .then(Commands.literal("npc").executes(NpcManagementCommands::openEditorForLookedNpc))
+                .then(Commands.literal("dialogue").then(NpcDialogueCommands.registerDialogueScreenArgument()))
+                .executes(NpcManagementCommands::openEditorForLookedNpc);
     }
     static int openEditorForLookedNpc(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         CnpcEntity npc = CnpcCommandUtils.requireLookedNpc(context);
         boolean damageEnabled = NpcSettingsStorage.get(player.serverLevel()).isNpcDamageEnabled();
         PacketDistributor.sendToPlayer(player, new OpenNpcEditorPayload(npc.getId(), npc.getNpcId(), npc.getSkinId(), npc.isSlimModel(),
-                npc.getWalkSpeed(), npc.getTemperament().id(), npc.getAssignedRouteId(), npc.isNightModeOnly(), damageEnabled));
+                npc.getWalkSpeed(), npc.getTemperament().id(), npc.getAssignedRouteId(), npc.isNightModeOnly(), damageEnabled,
+                SkinDirectory.listSkins(), RouteStorage.get(player.serverLevel()).routeIds().stream().sorted().toList()));
         return 1;
     }
 

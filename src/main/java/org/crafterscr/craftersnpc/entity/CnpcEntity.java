@@ -2,11 +2,9 @@ package org.crafterscr.craftersnpc.entity;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
 import org.crafterscr.craftersnpc.route.RouteStorage;
-import org.crafterscr.craftersnpc.reputation.NpcReputation;
 import org.crafterscr.craftersnpc.entity.ai.NpcReactionController;
 import org.crafterscr.craftersnpc.entity.ai.NpcRouteController;
 import org.crafterscr.craftersnpc.entity.ai.NpcSocialController;
-import org.crafterscr.craftersnpc.reputation.ReputationReason;
 import org.crafterscr.craftersnpc.storage.NpcDataMigrations;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
@@ -67,9 +65,6 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> DIALOGUE_TEXT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DIALOGUE_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Integer> REPUTATION_DELTA = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Integer> REPUTATION_INDICATOR_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
-    public static final int REPUTATION_INDICATOR_DURATION_TICKS = 40;
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
@@ -145,15 +140,12 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
         builder.define(DIALOGUE_TEXT, "");
         builder.define(DIALOGUE_TICKS, 0);
-        builder.define(REPUTATION_DELTA, 0);
-        builder.define(REPUTATION_INDICATOR_TICKS, 0);
     }
 
     @Override
     public void tick() {
         super.tick();
         if (!level().isClientSide) {
-            tickReputationIndicator();
             if (tickDialogue()) {
                 return;
             }
@@ -185,33 +177,6 @@ public class CnpcEntity extends PathfinderMob {
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
-    }
-
-    public int getReputation(ServerPlayer player) {
-        return socialController.getReputation(player);
-    }
-
-    public int adjustReputation(ServerPlayer player, int delta, ReputationReason reason) {
-        return socialController.adjustReputation(player, delta, reason);
-    }
-
-    /**
-     * Fallback for non-private reputation indicators. Using this makes every tracking client see the change.
-     */
-    public void showSharedReputationIndicator(int appliedDelta) {
-        if (appliedDelta == 0) {
-            return;
-        }
-        entityData.set(REPUTATION_DELTA, appliedDelta);
-        entityData.set(REPUTATION_INDICATOR_TICKS, REPUTATION_INDICATOR_DURATION_TICKS);
-    }
-
-    public boolean isFriendlyWith(ServerPlayer player) {
-        return NpcReputation.isFriendly(getReputation(player));
-    }
-
-    public boolean isHostileTo(ServerPlayer player) {
-        return NpcReputation.isHostile(getReputation(player));
     }
 
     private boolean canStartDialogue() {
@@ -261,25 +226,6 @@ public class CnpcEntity extends PathfinderMob {
 
     public int getDialogueTicks() {
         return entityData.get(DIALOGUE_TICKS);
-    }
-
-    private void tickReputationIndicator() {
-        int remainingTicks = getReputationIndicatorTicks();
-        if (remainingTicks <= 0) {
-            return;
-        }
-        entityData.set(REPUTATION_INDICATOR_TICKS, remainingTicks - 1);
-        if (remainingTicks == 1) {
-            entityData.set(REPUTATION_DELTA, 0);
-        }
-    }
-
-    public int getReputationDeltaIndicator() {
-        return entityData.get(REPUTATION_DELTA);
-    }
-
-    public int getReputationIndicatorTicks() {
-        return entityData.get(REPUTATION_INDICATOR_TICKS);
     }
 
     public List<String> getDialoguePhrases() {
@@ -385,9 +331,6 @@ public class CnpcEntity extends PathfinderMob {
         }
 
         if (source.getEntity() instanceof Player player && player.isAlive()) {
-            if (player instanceof ServerPlayer serverPlayer) {
-                adjustReputation(serverPlayer, NpcReputation.PLAYER_ATTACK_PENALTY, ReputationReason.PLAYER_ATTACK);
-            }
             reactionController.start(player);
         }
         return true;

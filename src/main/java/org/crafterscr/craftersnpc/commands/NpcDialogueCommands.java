@@ -45,6 +45,9 @@ final class NpcDialogueCommands {
                                         .suggests(CnpcCommandSuggestions::suggestDialoguePhrases)
                                         .then(Commands.argument("newPhrase", StringArgumentType.greedyString()).executes(NpcDialogueCommands::editDialoguePhrase)))))
                 .then(Commands.literal("bank")
+                        .then(Commands.literal("create")
+                                .then(Commands.argument("bankId", StringArgumentType.word())
+                                        .executes(NpcDialogueCommands::createDialogueBank)))
                         .then(Commands.literal("assign")
                                 .then(Commands.argument("npcId", StringArgumentType.word())
                                         .suggests(CnpcCommandSuggestions::suggestNpcIds)
@@ -65,6 +68,10 @@ final class NpcDialogueCommands {
                                         .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
                                         .executes(NpcDialogueCommands::listBankPhrases))
                                 .executes(NpcDialogueCommands::listDialogueBanks))
+                        .then(Commands.literal("delete")
+                                .then(Commands.argument("bankId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
+                                        .executes(NpcDialogueCommands::deleteDialogueBank)))
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("bankId", StringArgumentType.word())
                                         .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
@@ -82,6 +89,13 @@ final class NpcDialogueCommands {
                                         .executes(NpcDialogueCommands::removeDialoguePhrase))));
     }
 
+
+    static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> registerDialogueScreenArgument() {
+        return Commands.argument("npcId", StringArgumentType.word())
+                .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                .executes(NpcDialogueCommands::openDialogueEditor);
+    }
+
     static int openDialogueEditor(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String npcId = StringArgumentType.getString(context, "npcId");
@@ -91,6 +105,32 @@ final class NpcDialogueCommands {
             return 0;
         }
         PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueBankId(), npc.get().getDialogueEntries(), DialogueBankStorage.get(player.serverLevel()).bankIds().stream().sorted().toList()));
+        return 1;
+    }
+
+    static int createDialogueBank(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String bankId = DialogueBankStorage.normalizeBankId(StringArgumentType.getString(context, "bankId"));
+        if (bankId.isBlank()) {
+            context.getSource().sendFailure(Component.literal("El ID del banco no puede estar vacío."));
+            return 0;
+        }
+        DialogueBankStorage storage = DialogueBankStorage.get(player.serverLevel());
+        if (!storage.hasBank(bankId)) {
+            storage.saveBank(bankId, List.of());
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Banco de diálogos disponible: " + bankId + "."), true);
+        return 1;
+    }
+
+    static int deleteDialogueBank(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String bankId = DialogueBankStorage.normalizeBankId(StringArgumentType.getString(context, "bankId"));
+        if (!DialogueBankStorage.get(player.serverLevel()).removeBank(bankId)) {
+            context.getSource().sendFailure(Component.literal("Banco no encontrado: " + bankId));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Banco de diálogos eliminado: " + bankId + "."), true);
         return 1;
     }
 
