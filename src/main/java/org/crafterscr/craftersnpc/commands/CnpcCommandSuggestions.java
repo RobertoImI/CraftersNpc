@@ -103,6 +103,15 @@ final class CnpcCommandSuggestions {
         }
     }
 
+    static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestDialogueBanks(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            DialogueBankStorage.get(player.serverLevel()).bankIds().stream().sorted().forEach(builder::suggest);
+        } catch (CommandSyntaxException ignored) {
+        }
+        return builder.buildFuture();
+    }
+
     static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestNpcIds(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         try {
             ServerPlayer player = context.getSource().getPlayerOrException();

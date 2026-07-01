@@ -15,11 +15,12 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public record SaveNpcDialoguePayload(int entityId, List<DialogueEntry> entries) implements CustomPacketPayload {
+public record SaveNpcDialoguePayload(int entityId, String bankId, List<DialogueEntry> entries) implements CustomPacketPayload {
     public static final Type<SaveNpcDialoguePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "save_npc_dialogue"));
     public static final StreamCodec<FriendlyByteBuf, SaveNpcDialoguePayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
                 buf.writeInt(payload.entityId());
+                buf.writeUtf(payload.bankId(), 64);
                 buf.writeVarInt(Math.min(payload.entries().size(), CnpcEntity.MAX_DIALOGUE_PHRASES));
                 for (DialogueEntry entry : payload.entries().subList(0, Math.min(payload.entries().size(), CnpcEntity.MAX_DIALOGUE_PHRASES))) {
                     writeEntry(buf, entry);
@@ -27,12 +28,13 @@ public record SaveNpcDialoguePayload(int entityId, List<DialogueEntry> entries) 
             },
             buf -> {
                 int entityId = buf.readInt();
+                String bankId = buf.readUtf(64);
                 int size = Math.min(buf.readVarInt(), CnpcEntity.MAX_DIALOGUE_PHRASES);
                 List<DialogueEntry> entries = new ArrayList<>(size);
                 for (int index = 0; index < size; index++) {
                     entries.add(readEntry(buf));
                 }
-                return new SaveNpcDialoguePayload(entityId, entries);
+                return new SaveNpcDialoguePayload(entityId, bankId, entries);
             }
     );
 
@@ -64,6 +66,7 @@ public record SaveNpcDialoguePayload(int entityId, List<DialogueEntry> entries) 
         context.enqueueWork(() -> {
             Entity entity = player.serverLevel().getEntity(payload.entityId());
             if (entity instanceof CnpcEntity npc && player.distanceToSqr(npc) <= 64.0D) {
+                npc.setDialogueBankId(payload.bankId());
                 npc.replaceDialogueEntries(payload.entries());
             }
         });

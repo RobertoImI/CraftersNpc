@@ -57,6 +57,32 @@ final class NpcDialogueCommands {
                                         .then(Commands.literal("once").then(Commands.literal("on").executes(ctx -> editDialogueOncePerPlayer(ctx, true))).then(Commands.literal("off").executes(ctx -> editDialogueOncePerPlayer(ctx, false))))
                                         .then(Commands.literal("cooldown").then(Commands.argument("ticks", IntegerArgumentType.integer(0)).executes(NpcDialogueCommands::editDialogueCooldown)))
                                         .then(Commands.literal("priority").then(Commands.argument("priority", IntegerArgumentType.integer()).executes(NpcDialogueCommands::editDialoguePriority))))))
+                .then(Commands.literal("bank")
+                        .then(Commands.literal("assign")
+                                .then(Commands.argument("npcId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                                        .then(Commands.argument("bankId", StringArgumentType.word())
+                                                .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
+                                                .executes(NpcDialogueCommands::assignDialogueBank))))
+                        .then(Commands.literal("clear")
+                                .then(Commands.argument("npcId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                                        .executes(NpcDialogueCommands::clearDialogueBank)))
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("bankId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
+                                        .then(Commands.argument("phrase", StringArgumentType.greedyString())
+                                                .executes(NpcDialogueCommands::addBankPhrase))))
+                        .then(Commands.literal("list")
+                                .then(Commands.argument("bankId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
+                                        .executes(NpcDialogueCommands::listBankPhrases))
+                                .executes(NpcDialogueCommands::listDialogueBanks))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("bankId", StringArgumentType.word())
+                                        .suggests(CnpcCommandSuggestions::suggestDialogueBanks)
+                                        .then(Commands.argument("phrase", IntegerArgumentType.integer(1))
+                                                .executes(NpcDialogueCommands::removeBankPhrase)))))
                 .then(Commands.literal("screen")
                         .then(Commands.argument("npcId", StringArgumentType.word())
                                 .suggests(CnpcCommandSuggestions::suggestNpcIds)
@@ -80,7 +106,69 @@ final class NpcDialogueCommands {
         List<OpenNpcDialogueEditorPayload.PlayerReputation> reputations = npc.get().playerMemories().stream()
                 .map(memory -> new OpenNpcDialogueEditorPayload.PlayerReputation(memory.lastKnownName(), memory.reputation(), memory.interactionCount(), memory.lastDialoguePhraseIndex()))
                 .toList();
-        PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueEntries(), reputations));
+        PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueBankId(), npc.get().getDialogueEntries(), DialogueBankStorage.get(player.serverLevel()).bankIds().stream().sorted().toList(), reputations));
+        return 1;
+    }
+
+    static int assignDialogueBank(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        String bankId = DialogueBankStorage.normalizeBankId(StringArgumentType.getString(context, "bankId"));
+        Optional<CnpcEntity> npc = CnpcCommandUtils.findNpc(context, npcId);
+        if (npc.isEmpty()) { context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId)); return 0; }
+        npc.get().setDialogueBankId(bankId);
+        context.getSource().sendSuccess(() -> Component.literal("Banco de diálogos de " + npcId + " actualizado a " + bankId + "."), true);
+        return 1;
+    }
+
+    static int clearDialogueBank(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String npcId = StringArgumentType.getString(context, "npcId");
+        Optional<CnpcEntity> npc = CnpcCommandUtils.findNpc(context, npcId);
+        if (npc.isEmpty()) { context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId)); return 0; }
+        npc.get().setDialogueBankId("");
+        context.getSource().sendSuccess(() -> Component.literal("Banco de diálogos removido de " + npcId + "."), true);
+        return 1;
+    }
+
+    static int addBankPhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String bankId = StringArgumentType.getString(context, "bankId");
+        String phrase = StringArgumentType.getString(context, "phrase");
+        if (!DialogueBankStorage.get(player.serverLevel()).addPhrase(bankId, phrase)) {
+            context.getSource().sendFailure(Component.literal("La frase del banco no puede estar vacía."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase añadida al banco " + DialogueBankStorage.normalizeBankId(bankId) + "."), true);
+        return 1;
+    }
+
+    static int listDialogueBanks(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Set<String> ids = DialogueBankStorage.get(player.serverLevel()).bankIds();
+        context.getSource().sendSuccess(() -> Component.literal("Bancos: " + (ids.isEmpty() ? "(ninguno)" : String.join(", ", ids.stream().sorted().toList()))), false);
+        return ids.size();
+    }
+
+    static int listBankPhrases(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String bankId = StringArgumentType.getString(context, "bankId");
+        List<DialogueEntry> entries = DialogueBankStorage.get(player.serverLevel()).getBank(bankId);
+        if (entries.isEmpty()) { context.getSource().sendSuccess(() -> Component.literal("Banco " + DialogueBankStorage.normalizeBankId(bankId) + ": (sin frases)"), false); return 1; }
+        for (int i = 0; i < entries.size(); i++) {
+            int index = i;
+            context.getSource().sendSuccess(() -> Component.literal("#" + (index + 1) + ": " + entries.get(index).text()), false);
+        }
+        return entries.size();
+    }
+
+    static int removeBankPhrase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String bankId = StringArgumentType.getString(context, "bankId");
+        int phraseIndex = IntegerArgumentType.getInteger(context, "phrase") - 1;
+        if (!DialogueBankStorage.get(player.serverLevel()).removePhrase(bankId, phraseIndex)) {
+            context.getSource().sendFailure(Component.literal("Índice de frase inválido para el banco."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Frase removida del banco " + DialogueBankStorage.normalizeBankId(bankId) + "."), true);
         return 1;
     }
 

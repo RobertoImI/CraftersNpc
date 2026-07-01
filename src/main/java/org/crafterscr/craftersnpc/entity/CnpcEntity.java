@@ -12,6 +12,7 @@ import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
+import org.crafterscr.craftersnpc.dialogue.DialogueBankStorage;
 import org.crafterscr.craftersnpc.dialogue.DialogueContext;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.dialogue.DialogueService;
@@ -92,6 +93,7 @@ public class CnpcEntity extends PathfinderMob {
     private Map<String, String> activeRouteActionParameters = Map.of();
     private int activeRouteActionTicks;
     private String activeScheduleRouteId = "";
+    private String dialogueBankId = "";
 
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
@@ -105,6 +107,7 @@ public class CnpcEntity extends PathfinderMob {
     private double walkSpeed = DEFAULT_WALK_SPEED;
     private UUID dialoguePlayerUuid;
     private int lastDialoguePhraseIndex = -1;
+    private String lastDialogueText = "";
 
     protected CnpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -300,6 +303,19 @@ public class CnpcEntity extends PathfinderMob {
         return lastDialoguePhraseIndex;
     }
 
+    public String getLastDialogueText() {
+        return lastDialogueText;
+    }
+
+    public String getDialogueBankId() {
+        return dialogueBankId;
+    }
+
+    public void setDialogueBankId(String dialogueBankId) {
+        this.dialogueBankId = DialogueBankStorage.normalizeBankId(dialogueBankId);
+        setLastDialoguePhraseIndex(-1);
+    }
+
     public void setLastDialoguePhraseIndex(int index) {
         lastDialoguePhraseIndex = index >= 0 && index < dialogueEntries.size() ? index : -1;
     }
@@ -318,9 +334,17 @@ public class CnpcEntity extends PathfinderMob {
 
     public void markDialogueEntryUsed(int index, int cooldownTicks, ServerPlayer player) {
         setLastDialoguePhraseIndex(index);
+        if (index >= 0 && index < dialogueEntries.size()) {
+            lastDialogueText = dialogueEntries.get(index).text();
+        }
         if (player != null) {
             socialController.getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
         }
+    }
+
+    public void markDialogueTextUsed(String text) {
+        lastDialoguePhraseIndex = -1;
+        lastDialogueText = DialogueEntry.normalizeText(text);
     }
 
 
@@ -1242,6 +1266,7 @@ public class CnpcEntity extends PathfinderMob {
         tag.putBoolean("NightModeOnly", nightModeOnly);
         tag.putDouble("WalkSpeed", walkSpeed);
         tag.putString("Temperament", getTemperament().id);
+        tag.putString("DialogueBank", dialogueBankId);
         tag.putInt("RouteIndex", routeIndex);
         tag.putBoolean("MovingForward", movingForward);
         tag.putInt("WaitTicks", waitTicks);
@@ -1305,6 +1330,7 @@ public class CnpcEntity extends PathfinderMob {
         nightModeOnly = tag.getBoolean("NightModeOnly");
         setWalkSpeed(tag.contains("WalkSpeed", Tag.TAG_DOUBLE) ? tag.getDouble("WalkSpeed") : DEFAULT_WALK_SPEED);
         setTemperament(Temperament.fromId(tag.getString("Temperament")));
+        setDialogueBankId(tag.contains("DialogueBank", Tag.TAG_STRING) ? tag.getString("DialogueBank") : "");
         routeIndex = tag.getInt("RouteIndex");
         movingForward = tag.getBoolean("MovingForward");
         waitTicks = normalizeWaitTicks(tag.getInt("WaitTicks"));

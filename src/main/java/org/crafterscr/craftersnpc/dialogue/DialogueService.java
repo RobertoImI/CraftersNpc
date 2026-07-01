@@ -3,6 +3,7 @@ package org.crafterscr.craftersnpc.dialogue;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.entity.NpcPlayerMemory;
 
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,7 @@ public final class DialogueService {
     }
 
     public static boolean startConversation(CnpcEntity npc, ServerPlayer player, DialogueContext context, NpcPlayerMemory memory) {
-        List<DialogueEntry> entries = npc.getDialogueEntries();
+        List<DialogueEntry> entries = availableEntries(npc);
         if (entries.isEmpty()) {
             return false;
         }
@@ -41,9 +42,21 @@ public final class DialogueService {
 
         DialogueEntry entry = entries.get(phraseIndex);
         int duration = durationTicks(entry.text());
-        npc.markDialogueEntryUsed(phraseIndex, entry.cooldownTicks(), player);
+        if (phraseIndex < npc.getDialogueEntries().size()) {
+            npc.markDialogueEntryUsed(phraseIndex, entry.cooldownTicks(), player);
+        } else {
+            npc.markDialogueTextUsed(entry.text());
+        }
         npc.startDialogue(entry.text(), duration, player);
         return true;
+    }
+
+    private static List<DialogueEntry> availableEntries(CnpcEntity npc) {
+        List<DialogueEntry> entries = new ArrayList<>(npc.getDialogueEntries());
+        if (!npc.getDialogueBankId().isBlank() && npc.level() instanceof ServerLevel serverLevel) {
+            entries.addAll(DialogueBankStorage.get(serverLevel).getBank(npc.getDialogueBankId()));
+        }
+        return entries;
     }
 
     private static int selectPhraseIndex(CnpcEntity npc, List<DialogueEntry> entries, DialogueContext context, NpcPlayerMemory memory) {
@@ -64,7 +77,7 @@ public final class DialogueService {
         int lastPhraseIndex = memory == null ? npc.getLastDialoguePhraseIndex() : memory.lastDialoguePhraseIndex();
         for (int index = 0; index < entries.size(); index++) {
             DialogueEntry entry = entries.get(index);
-            if (index == lastPhraseIndex && entries.size() > 1) {
+            if ((index == lastPhraseIndex || entry.text().equals(npc.getLastDialogueText())) && entries.size() > 1) {
                 continue;
             }
             long gameTime = npc.level().getGameTime();

@@ -21,9 +21,12 @@ public class NpcDialogueEditorScreen extends Screen {
     private final int entityId;
     private final String npcId;
     private final List<DialogueEntry> entries;
+    private final List<String> bankIds;
     private final List<PlayerReputation> reputations;
     private int selectedIndex;
     private int scroll;
+    private String bankValue = "";
+    private EditBox bank;
     private EditBox text;
     private EditBox category;
     private EditBox weight;
@@ -33,11 +36,13 @@ public class NpcDialogueEditorScreen extends Screen {
     private EditBox maxReputation;
     private Checkbox oncePerPlayer;
 
-    public NpcDialogueEditorScreen(int entityId, String npcId, List<DialogueEntry> entries, List<PlayerReputation> reputations) {
+    public NpcDialogueEditorScreen(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds, List<PlayerReputation> reputations) {
         super(Component.literal("Diálogos de NPC"));
         this.entityId = entityId;
         this.npcId = npcId;
         this.entries = new ArrayList<>(entries);
+        this.bankIds = List.copyOf(bankIds);
+        this.bankValue = bankId;
         this.reputations = List.copyOf(reputations);
     }
 
@@ -46,18 +51,20 @@ public class NpcDialogueEditorScreen extends Screen {
         int left = 18;
         int editorX = width / 2 + 8;
         int top = 34;
-        text = box(editorX, top, 210, "Texto");
-        category = box(editorX, top + 34, 100, "Categoría");
-        weight = box(editorX + 110, top + 34, 45, "Peso");
-        priority = box(editorX + 165, top + 34, 45, "Prioridad");
-        cooldown = box(editorX, top + 68, 65, "Cooldown");
-        minReputation = box(editorX + 75, top + 68, 60, "Rep. mín.");
-        maxReputation = box(editorX + 145, top + 68, 60, "Rep. máx.");
-        oncePerPlayer = Checkbox.builder(Component.literal("Una vez por jugador"), font).pos(editorX, top + 98).selected(false).build();
+        bank = box(editorX, top, 210, "Banco");
+        bank.setValue(bankValue);
+        text = box(editorX, top + 34, 210, "Texto");
+        category = box(editorX, top + 68, 100, "Categoría");
+        weight = box(editorX + 110, top + 68, 45, "Peso");
+        priority = box(editorX + 165, top + 68, 45, "Prioridad");
+        cooldown = box(editorX, top + 102, 65, "Cooldown");
+        minReputation = box(editorX + 75, top + 102, 60, "Rep. mín.");
+        maxReputation = box(editorX + 145, top + 102, 60, "Rep. máx.");
+        oncePerPlayer = Checkbox.builder(Component.literal("Una vez por jugador"), font).pos(editorX, top + 132).selected(false).build();
         addRenderableWidget(oncePerPlayer);
-        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 126, 70, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 126, 64, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + 146, top + 126, 64, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 160, 70, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 160, 64, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + 146, top + 160, 64, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↑"), b -> moveSelected(-1)).bounds(left, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↓"), b -> moveSelected(1)).bounds(left + 28, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, height - 28, 100, 20).build());
@@ -92,7 +99,7 @@ public class NpcDialogueEditorScreen extends Screen {
     private void addEntry() { if (entries.size() < CnpcEntity.MAX_DIALOGUE_PHRASES && !DialogueEntry.normalizeText(text.getValue()).isEmpty()) { entries.add(editorEntry()); selectedIndex = entries.size() - 1; loadSelected(); } }
     private void deleteEntry() { if (!entries.isEmpty()) { entries.remove(selectedIndex); selectedIndex = Math.max(0, selectedIndex - 1); loadSelected(); } }
     private void moveSelected(int delta) { int to = selectedIndex + delta; if (to >= 0 && to < entries.size()) { entries.add(to, entries.remove(selectedIndex)); selectedIndex = to; } }
-    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, entries)); onClose(); }
+    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, bank.getValue(), entries)); onClose(); }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -117,7 +124,7 @@ public class NpcDialogueEditorScreen extends Screen {
         renderBackground(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawString(font, title.getString() + ": " + npcId, 18, 14, 0xFFFFFF);
-        graphics.drawString(font, entries.size() + "/" + CnpcEntity.MAX_DIALOGUE_PHRASES + " frases", 18, height - 70, 0xA0A0A0);
+        graphics.drawString(font, entries.size() + "/" + CnpcEntity.MAX_DIALOGUE_PHRASES + " frases propias | Bancos: " + (bankIds.isEmpty() ? "ninguno" : String.join(", ", bankIds)), 18, height - 70, 0xA0A0A0);
         int listX = 18, y = 34, listW = width / 2 - 36;
         int maxRows = Math.max(1, (height - 104) / 24);
         for (int i = 0; i < maxRows && scroll + i < entries.size(); i++) {
