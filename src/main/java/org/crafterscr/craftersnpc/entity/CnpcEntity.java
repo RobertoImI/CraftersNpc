@@ -13,7 +13,6 @@ import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
 import org.crafterscr.craftersnpc.dialogue.DialogueBankStorage;
-import org.crafterscr.craftersnpc.dialogue.DialogueContext;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.dialogue.DialogueService;
 
@@ -182,11 +181,7 @@ public class CnpcEntity extends PathfinderMob {
             return InteractionResult.CONSUME;
         }
 
-        NpcPlayerMemory memory = socialController.getOrCreatePlayerMemory(serverPlayer);
-        DialogueContext context = socialController.createDialogueContext(memory);
-        if (DialogueService.startConversation(this, serverPlayer, context, memory)) {
-            socialController.maybeRewardDialogueReputation(serverPlayer, memory);
-            memory.recordInteraction(serverPlayer.getGameProfile().getName(), level().getGameTime());
+        if (DialogueService.startConversation(this, serverPlayer)) {
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
@@ -295,10 +290,6 @@ public class CnpcEntity extends PathfinderMob {
         return List.copyOf(dialogueEntries);
     }
 
-    public java.util.Collection<NpcPlayerMemory> playerMemories() {
-        return socialController.playerMemories();
-    }
-
     public int getLastDialoguePhraseIndex() {
         return lastDialoguePhraseIndex;
     }
@@ -320,30 +311,8 @@ public class CnpcEntity extends PathfinderMob {
         lastDialoguePhraseIndex = index >= 0 && index < dialogueEntries.size() ? index : -1;
     }
 
-    public DialogueContext withDialogueEntryState(DialogueContext context, int index) {
-        if (context == null || context.playerUuid() == null) {
-            return context;
-        }
-        NpcPlayerMemory memory = socialController.getPlayerMemory(context.playerUuid());
-        if (memory == null) {
-            return context;
-        }
-        long gameTime = level().getGameTime();
-        return context.withDialogueEntryState(memory.hasUsedDialogueEntry(index), memory.ticksSinceDialogueEntryUsed(index, gameTime));
-    }
-
-    public void markDialogueEntryUsed(int index, int cooldownTicks, ServerPlayer player) {
+    public void markDialogueUsed(int index, String text) {
         setLastDialoguePhraseIndex(index);
-        if (index >= 0 && index < dialogueEntries.size()) {
-            lastDialogueText = dialogueEntries.get(index).text();
-        }
-        if (player != null) {
-            socialController.getOrCreatePlayerMemory(player).markDialogueEntryUsed(index, cooldownTicks, level().getGameTime());
-        }
-    }
-
-    public void markDialogueTextUsed(String text) {
-        lastDialoguePhraseIndex = -1;
         lastDialogueText = DialogueEntry.normalizeText(text);
     }
 
@@ -369,10 +338,6 @@ public class CnpcEntity extends PathfinderMob {
         return addDialogueEntry(DialogueEntry.generic(phrase));
     }
 
-    public boolean addDialogueEntry(String phrase, String category) {
-        return addDialogueEntry(new DialogueEntry(phrase, category, DialogueEntry.DEFAULT_WEIGHT));
-    }
-
     public boolean addDialogueEntry(DialogueEntry entry) {
         if (entry.text().isEmpty() || entry.text().length() > MAX_DIALOGUE_PHRASE_LENGTH || dialogueEntries.size() >= MAX_DIALOGUE_PHRASES) {
             return false;
@@ -386,69 +351,7 @@ public class CnpcEntity extends PathfinderMob {
         if (index < 0 || index >= dialogueEntries.size() || normalized.isEmpty()) {
             return false;
         }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(normalized, current.category(), current.weight(), current.minReputation(),
-            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
-        return true;
-    }
-
-    public boolean editDialogueWeight(int index, int weight) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), weight, current.minReputation(),
-            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
-        return true;
-    }
-
-    public boolean editDialogueCategory(int index, String category) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), DialogueEntry.normalizeCategory(category), current.weight(), current.minReputation(),
-            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
-        return true;
-    }
-
-    public boolean editDialogueReputationRange(int index, int minReputation, int maxReputation) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), minReputation,
-            maxReputation, current.oncePerPlayer(), current.cooldownTicks(), current.priority()));
-        return true;
-    }
-
-    public boolean editDialogueOncePerPlayer(int index, boolean oncePerPlayer) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
-            current.maxReputation(), oncePerPlayer, current.cooldownTicks(), current.priority()));
-        return true;
-    }
-
-    public boolean editDialogueCooldown(int index, int cooldownTicks) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
-            current.maxReputation(), current.oncePerPlayer(), cooldownTicks, current.priority()));
-        return true;
-    }
-
-    public boolean editDialoguePriority(int index, int priority) {
-        if (index < 0 || index >= dialogueEntries.size()) {
-            return false;
-        }
-        DialogueEntry current = dialogueEntries.get(index);
-        dialogueEntries.set(index, new DialogueEntry(current.text(), current.category(), current.weight(), current.minReputation(),
-            current.maxReputation(), current.oncePerPlayer(), current.cooldownTicks(), priority));
+        dialogueEntries.set(index, new DialogueEntry(normalized));
         return true;
     }
 
@@ -461,9 +364,6 @@ public class CnpcEntity extends PathfinderMob {
             lastDialoguePhraseIndex = -1;
         } else if (lastDialoguePhraseIndex > index) {
             lastDialoguePhraseIndex--;
-        }
-        for (NpcPlayerMemory memory : socialController.playerMemories()) {
-            memory.removeDialogueEntryIndex(index);
         }
         return true;
     }
@@ -1282,9 +1182,6 @@ public class CnpcEntity extends PathfinderMob {
         }
         tag.put("DialoguePhrases", dialogueTag);
 
-        ListTag playerMemoriesTag = new ListTag();
-        socialController.savePlayerMemories(playerMemoriesTag);
-        tag.put("PlayerMemories", playerMemoriesTag);
 
         ListTag scheduleTag = new ListTag();
         for (NpcScheduleEntry entry : schedule) {
@@ -1350,8 +1247,6 @@ public class CnpcEntity extends PathfinderMob {
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
 
-        ListTag playerMemoriesTag = tag.getList("PlayerMemories", Tag.TAG_COMPOUND);
-        socialController.loadPlayerMemories(playerMemoriesTag);
 
         schedule.clear();
         activeScheduleRouteId = "";

@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds, List<PlayerReputation> reputations) implements CustomPacketPayload {
+public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds) implements CustomPacketPayload {
     public static final Type<OpenNpcDialogueEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "open_npc_dialogue_editor"));
     public static final StreamCodec<FriendlyByteBuf, OpenNpcDialogueEditorPayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
@@ -30,13 +30,6 @@ public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String ba
                 for (String bankId : payload.bankIds()) {
                     buf.writeUtf(bankId, 64);
                 }
-                buf.writeVarInt(payload.reputations().size());
-                for (PlayerReputation reputation : payload.reputations()) {
-                    buf.writeUtf(reputation.playerName(), 64);
-                    buf.writeInt(reputation.reputation());
-                    buf.writeVarInt(reputation.interactions());
-                    buf.writeInt(reputation.lastPhraseIndex());
-                }
             },
             buf -> {
                 int entityId = buf.readInt();
@@ -48,10 +41,7 @@ public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String ba
                 int bankSize = Math.min(buf.readVarInt(), 512);
                 List<String> bankIds = new ArrayList<>(bankSize);
                 for (int index = 0; index < bankSize; index++) bankIds.add(buf.readUtf(64));
-                int reputationSize = Math.min(buf.readVarInt(), 512);
-                List<PlayerReputation> reputations = new ArrayList<>(reputationSize);
-                for (int index = 0; index < reputationSize; index++) reputations.add(new PlayerReputation(buf.readUtf(64), buf.readInt(), buf.readVarInt(), buf.readInt()));
-                return new OpenNpcDialogueEditorPayload(entityId, npcId, bankId, entries, bankIds, reputations);
+                return new OpenNpcDialogueEditorPayload(entityId, npcId, bankId, entries, bankIds);
             }
     );
 
@@ -59,8 +49,6 @@ public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String ba
     public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     public static void handle(OpenNpcDialogueEditorPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcDialogueEditorScreen(payload.entityId(), payload.npcId(), payload.bankId(), payload.entries(), payload.bankIds(), payload.reputations())));
+        context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcDialogueEditorScreen(payload.entityId(), payload.npcId(), payload.bankId(), payload.entries(), payload.bankIds())));
     }
-
-    public record PlayerReputation(String playerName, int reputation, int interactions, int lastPhraseIndex) {}
 }

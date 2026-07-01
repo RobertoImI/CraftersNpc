@@ -45,18 +45,10 @@ public record SaveNpcDialoguePayload(int entityId, String bankId, List<DialogueE
 
     static void writeEntry(FriendlyByteBuf buf, DialogueEntry entry) {
         buf.writeUtf(entry.text(), CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH);
-        buf.writeUtf(entry.category(), 64);
-        buf.writeVarInt(entry.weight());
-        buf.writeInt(entry.minReputation());
-        buf.writeInt(entry.maxReputation());
-        buf.writeBoolean(entry.oncePerPlayer());
-        buf.writeVarInt(entry.cooldownTicks());
-        buf.writeInt(entry.priority());
     }
 
     static DialogueEntry readEntry(FriendlyByteBuf buf) {
-        return new DialogueEntry(buf.readUtf(CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH), buf.readUtf(64), buf.readVarInt(),
-                buf.readInt(), buf.readInt(), buf.readBoolean(), buf.readVarInt(), buf.readInt());
+        return new DialogueEntry(buf.readUtf(CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH));
     }
 
     public static void handle(SaveNpcDialoguePayload payload, IPayloadContext context) {

@@ -154,13 +154,6 @@ public final class NpcPresetStorage {
         for (DialogueEntry entry : npc.getDialogueEntries()) {
             JsonObject object = new JsonObject();
             object.addProperty("text", entry.text());
-            object.addProperty("category", entry.category());
-            object.addProperty("weight", entry.weight());
-            object.addProperty("minReputation", entry.minReputation());
-            object.addProperty("maxReputation", entry.maxReputation());
-            object.addProperty("oncePerPlayer", entry.oncePerPlayer());
-            object.addProperty("cooldownTicks", entry.cooldownTicks());
-            object.addProperty("priority", entry.priority());
             array.add(object);
         }
         return array;
@@ -258,7 +251,7 @@ public final class NpcPresetStorage {
             JsonObject object = element.getAsJsonObject();
             String text = string(object, "text");
             if (text.isBlank() || text.length() > CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH) throw new IllegalArgumentException("Diálogo inválido o demasiado largo.");
-            entries.add(new DialogueEntry(text, optionalString(object, "category"), optionalInt(object, "weight", DialogueEntry.DEFAULT_WEIGHT), optionalInt(object, "minReputation", DialogueEntry.DEFAULT_MIN_REPUTATION), optionalInt(object, "maxReputation", DialogueEntry.DEFAULT_MAX_REPUTATION), optionalBool(object, "oncePerPlayer"), optionalInt(object, "cooldownTicks", 0), optionalInt(object, "priority", DialogueEntry.DEFAULT_PRIORITY)));
+            entries.add(new DialogueEntry(text));
         }
         return entries;
     }
