@@ -1,5 +1,6 @@
 package org.crafterscr.craftersnpc.client.gui;
 
+import org.crafterscr.craftersnpc.dialogue.DialogueBankStorage;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import org.crafterscr.craftersnpc.network.SaveNpcDialoguePayload;
@@ -7,13 +8,15 @@ import org.crafterscr.craftersnpc.network.SaveNpcDialoguePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.util.FormattedCharSequence;
 
@@ -22,18 +25,23 @@ public class NpcDialogueEditorScreen extends Screen {
     private final String npcId;
     private final List<DialogueEntry> entries;
     private final List<String> bankIds;
+    private final Map<String, List<DialogueEntry>> bankEntries;
     private int selectedIndex;
     private int scroll;
+    private boolean editingBank;
     private String bankValue = "";
     private Button bankButton;
-    private EditBox text;
+    private Button modeButton;
+    private MultiLineEditBox text;
 
-    public NpcDialogueEditorScreen(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds) {
+    public NpcDialogueEditorScreen(int entityId, String npcId, String bankId, List<DialogueEntry> entries, List<String> bankIds, Map<String, List<DialogueEntry>> bankEntries) {
         super(Component.literal("Diálogos de NPC"));
         this.entityId = entityId;
         this.npcId = npcId;
         this.entries = new ArrayList<>(entries);
         this.bankIds = List.copyOf(bankIds);
+        this.bankEntries = new HashMap<>();
+        bankEntries.forEach((id, bankPhrases) -> this.bankEntries.put(id, new ArrayList<>(bankPhrases)));
         this.bankValue = bankId;
     }
 
@@ -44,10 +52,14 @@ public class NpcDialogueEditorScreen extends Screen {
         int top = 34;
         bankButton = Button.builder(Component.literal(displayBank()), b -> cycleBank()).bounds(editorX, top, 210, 20).build();
         addRenderableWidget(bankButton);
-        text = box(editorX, top + 34, 210, "Texto");
-        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 68, 70, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 68, 64, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + 146, top + 68, 64, 20).build());
+        modeButton = Button.builder(Component.literal(displayMode()), b -> toggleMode()).bounds(editorX, top + 24, 210, 20).build();
+        addRenderableWidget(modeButton);
+        text = new MultiLineEditBox(Minecraft.getInstance().font, editorX, top + 58, 210, 80, Component.literal("Texto"), Component.literal("Escribe una frase larga o párrafo"));
+        text.setCharacterLimit(CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH);
+        addRenderableWidget(text);
+        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 144, 70, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 144, 64, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + 146, top + 144, 64, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↑"), b -> moveSelected(-1)).bounds(left, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↓"), b -> moveSelected(1)).bounds(left + 28, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, height - 28, 100, 20).build());
@@ -55,22 +67,21 @@ public class NpcDialogueEditorScreen extends Screen {
         loadSelected();
     }
 
-    private EditBox box(int x, int y, int w, String label) {
-        EditBox box = new EditBox(Minecraft.getInstance().font, x, y, w, 20, Component.literal(label));
-        addRenderableWidget(box);
-        return box;
+    private List<DialogueEntry> activeEntries() {
+        if (!editingBank) return entries;
+        return bankEntries.computeIfAbsent(bankValue, id -> new ArrayList<>());
     }
 
+    private void resetSelection() { selectedIndex = 0; scroll = 0; loadSelected(); }
     private void loadSelected() {
-        if (entries.isEmpty()) {
-            text.setValue("");
-            return;
-        }
-        selectedIndex = Math.max(0, Math.min(selectedIndex, entries.size() - 1));
-        text.setValue(entries.get(selectedIndex).text());
+        List<DialogueEntry> active = activeEntries();
+        if (active.isEmpty()) { text.setValue(""); return; }
+        selectedIndex = Math.max(0, Math.min(selectedIndex, active.size() - 1));
+        text.setValue(active.get(selectedIndex).text());
     }
 
     private String displayBank() { return bankValue == null || bankValue.isBlank() ? "Banco: (sin banco)" : "Banco: " + bankValue; }
+    private String displayMode() { return editingBank ? "Editando frases del banco" : "Editando frases propias"; }
 
     private void cycleBank() {
         List<String> options = new ArrayList<>();
@@ -78,31 +89,43 @@ public class NpcDialogueEditorScreen extends Screen {
         for (String bankId : bankIds) if (!options.contains(bankId)) options.add(bankId);
         int index = Math.max(0, options.indexOf(bankValue));
         bankValue = options.get((index + 1) % options.size());
+        if (bankValue.isBlank()) editingBank = false;
         bankButton.setMessage(Component.literal(displayBank()));
+        modeButton.setMessage(Component.literal(displayMode()));
+        resetSelection();
+    }
+
+    private void toggleMode() {
+        if (bankValue == null || bankValue.isBlank()) return;
+        editingBank = !editingBank;
+        modeButton.setMessage(Component.literal(displayMode()));
+        resetSelection();
     }
 
     private DialogueEntry editorEntry() { return new DialogueEntry(text.getValue()); }
-    private void applyEditor() { if (!entries.isEmpty()) entries.set(selectedIndex, editorEntry()); }
-    private void addEntry() { if (entries.size() < CnpcEntity.MAX_DIALOGUE_PHRASES && !DialogueEntry.normalizeText(text.getValue()).isEmpty()) { entries.add(editorEntry()); selectedIndex = entries.size() - 1; loadSelected(); } }
-    private void deleteEntry() { if (!entries.isEmpty()) { entries.remove(selectedIndex); selectedIndex = Math.max(0, selectedIndex - 1); loadSelected(); } }
-    private void moveSelected(int delta) { int to = selectedIndex + delta; if (to >= 0 && to < entries.size()) { entries.add(to, entries.remove(selectedIndex)); selectedIndex = to; } }
-    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, bankValue, entries)); onClose(); }
+    private void applyEditor() { List<DialogueEntry> active = activeEntries(); if (!active.isEmpty()) active.set(selectedIndex, editorEntry()); }
+    private void addEntry() { List<DialogueEntry> active = activeEntries(); if (active.size() < activeLimit() && !DialogueEntry.normalizeText(text.getValue()).isEmpty()) { active.add(editorEntry()); selectedIndex = active.size() - 1; loadSelected(); } }
+    private int activeLimit() { return editingBank ? DialogueBankStorage.MAX_BANK_PHRASES : CnpcEntity.MAX_DIALOGUE_PHRASES; }
+    private void deleteEntry() { List<DialogueEntry> active = activeEntries(); if (!active.isEmpty()) { active.remove(selectedIndex); selectedIndex = Math.max(0, selectedIndex - 1); loadSelected(); } }
+    private void moveSelected(int delta) { List<DialogueEntry> active = activeEntries(); int to = selectedIndex + delta; if (to >= 0 && to < active.size()) { active.add(to, active.remove(selectedIndex)); selectedIndex = to; } }
+    private void save() { applyEditor(); PacketDistributor.sendToServer(new SaveNpcDialoguePayload(entityId, bankValue, entries, bankEntries)); onClose(); }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         int listX = 18;
         int listY = 34;
         int listW = width / 2 - 36;
+        List<DialogueEntry> active = activeEntries();
         if (mouseX >= listX && mouseX <= listX + listW && mouseY >= listY && mouseY <= height - 70) {
             int clicked = scroll + ((int) mouseY - listY) / 24;
-            if (clicked >= 0 && clicked < entries.size()) { selectedIndex = clicked; loadSelected(); return true; }
+            if (clicked >= 0 && clicked < active.size()) { selectedIndex = clicked; loadSelected(); return true; }
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double dx, double dy) {
-        scroll = Math.max(0, Math.min(Math.max(0, entries.size() - 1), scroll - (int) dy));
+        scroll = Math.max(0, Math.min(Math.max(0, activeEntries().size() - 1), scroll - (int) dy));
         return true;
     }
 
@@ -110,13 +133,16 @@ public class NpcDialogueEditorScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
+        List<DialogueEntry> active = activeEntries();
         graphics.drawString(font, title.getString() + ": " + npcId, 18, 14, 0xFFFFFF);
-        graphics.drawString(font, entries.size() + "/" + CnpcEntity.MAX_DIALOGUE_PHRASES + " frases propias | Bancos: " + (bankIds.isEmpty() ? "ninguno" : String.join(", ", bankIds)), 18, height - 70, 0xA0A0A0);
+        String label = editingBank ? "frases del banco " + bankValue : "frases propias";
+        graphics.drawString(font, active.size() + "/" + activeLimit() + " " + label + " | Bancos: " + (bankIds.isEmpty() ? "ninguno" : String.join(", ", bankIds)), 18, height - 70, 0xA0A0A0);
+        graphics.drawString(font, "Texto (hasta " + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH + " caracteres):", width / 2 + 8, 86, 0xA0A0A0);
         int listX = 18, y = 34, listW = width / 2 - 36;
         int maxRows = Math.max(1, (height - 104) / 24);
-        for (int i = 0; i < maxRows && scroll + i < entries.size(); i++) {
+        for (int i = 0; i < maxRows && scroll + i < active.size(); i++) {
             int index = scroll + i;
-            DialogueEntry entry = entries.get(index);
+            DialogueEntry entry = active.get(index);
             int rowY = y + i * 24;
             graphics.fill(listX, rowY, listX + listW, rowY + 22, index == selectedIndex ? 0x80336699 : 0x80202020);
             List<FormattedCharSequence> lines = font.split(Component.literal("#" + (index + 1) + " " + entry.text()), listW - 8);

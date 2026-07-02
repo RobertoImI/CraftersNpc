@@ -19,6 +19,7 @@ import java.util.Set;
 /** Stores reusable dialogue banks shared by multiple NPCs. */
 public class DialogueBankStorage extends SavedData {
     private static final String DATA_NAME = "craftersnpc_dialogue_banks";
+    public static final int MAX_BANK_PHRASES = 512;
     private final Map<String, List<DialogueEntry>> banks = new HashMap<>();
 
     public static DialogueBankStorage get(ServerLevel level) {
@@ -106,7 +107,7 @@ public class DialogueBankStorage extends SavedData {
     private static List<DialogueEntry> sanitize(List<DialogueEntry> entries) {
         return entries.stream()
                 .filter(entry -> !entry.text().isEmpty())
-                .limit(512)
+                .limit(MAX_BANK_PHRASES)
                 .toList();
     }
 

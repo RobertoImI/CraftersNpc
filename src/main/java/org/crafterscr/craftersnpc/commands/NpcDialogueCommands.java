@@ -104,7 +104,13 @@ final class NpcDialogueCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueBankId(), npc.get().getDialogueEntries(), DialogueBankStorage.get(player.serverLevel()).bankIds().stream().sorted().toList()));
+        DialogueBankStorage storage = DialogueBankStorage.get(player.serverLevel());
+        List<String> bankIds = storage.bankIds().stream().sorted().toList();
+        Map<String, List<DialogueEntry>> bankEntries = new HashMap<>();
+        for (String bankId : bankIds) {
+            bankEntries.put(bankId, storage.getBank(bankId));
+        }
+        PacketDistributor.sendToPlayer(player, new OpenNpcDialogueEditorPayload(npc.get().getId(), npc.get().getNpcId(), npc.get().getDialogueBankId(), npc.get().getDialogueEntries(), bankIds, bankEntries));
         return 1;
     }
 
