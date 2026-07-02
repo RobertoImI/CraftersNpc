@@ -12,6 +12,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
+import org.crafterscr.craftersnpc.network.OpenNpcGiftEditorPayload;
 
 import java.util.*;
 
@@ -64,5 +66,5 @@ final class NpcGiftCommands {
     private static int msgList(CommandContext<CommandSourceStack> c)throws CommandSyntaxException{ CnpcEntity n=npc(c); String t=StringArgumentType.getString(c,"type"); List<String> list=n.getGiftData().messages().get(t); c.getSource().sendSuccess(()->Component.literal(list.isEmpty()?"El tipo de mensaje "+t+" no tiene frases configuradas.":t+": "+list),false); return list.size();}
     private static int msgClear(CommandContext<CommandSourceStack> c)throws CommandSyntaxException{ CnpcEntity n=npc(c); String t=StringArgumentType.getString(c,"type"); n.getGiftData().messages().clear(t); c.getSource().sendSuccess(()->Component.literal("Frases "+t+" limpiadas para "+n.getNpcId()+"."),true); return save(n);}
     private static int info(CommandContext<CommandSourceStack> c)throws CommandSyntaxException{ CnpcEntity n=npc(c); NpcGiftData d=n.getGiftData(); c.getSource().sendSuccess(()->Component.literal("Regalos de "+n.getNpcId()+": enabled="+d.isEnabled()+", liked="+d.likedItems().size()+", favorite="+d.favoriteItems().size()+", disliked="+d.dislikedItems().size()+", recompensas="+d.rewardPool().size()+", rewardChance="+d.rewardChance()+", cooldown="+d.cooldownSeconds()+", consumeLiked="+d.consumeLiked()+", consumeFavorite="+d.consumeFavorite()+", consumeDisliked="+d.consumeDisliked()+", mensajes="+NpcGiftMessages.TYPES.stream().map(t->t+":"+d.messages().count(t)).toList()),false); return 1; }
-    private static int gui(CommandContext<CommandSourceStack> c)throws CommandSyntaxException{ ServerPlayer p=c.getSource().getPlayerOrException(); CnpcEntity n=npc(c); c.getSource().sendSuccess(()->Component.literal("GUI de regalos pendiente de menú interactivo. Usa /cnpc gift info "+n.getNpcId()+" y los comandos /cnpc gift para configurar."),false); return 1; }
+    private static int gui(CommandContext<CommandSourceStack> c)throws CommandSyntaxException{ ServerPlayer p=c.getSource().getPlayerOrException(); CnpcEntity n=npc(c); NpcGiftData d=n.getGiftData(); PacketDistributor.sendToPlayer(p, new OpenNpcGiftEditorPayload(n.getId(), n.getNpcId(), d.isEnabled(), new ArrayList<>(d.favoriteItems()), new ArrayList<>(d.likedItems()), new ArrayList<>(d.dislikedItems()), new ArrayList<>(d.rewardPool()), d.rewardChance(), d.cooldownSeconds(), d.consumeFavorite(), d.consumeLiked(), d.consumeDisliked(), d.messages().get("favorite"), d.messages().get("liked"), d.messages().get("disliked"), d.messages().get("unknown"), d.messages().get("cooldown"), d.messages().get("reward"), d.messages().get("noReward"))); return 1; }
 }

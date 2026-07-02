@@ -17,7 +17,9 @@ public final class CnpcNetwork {
         registrar.playToServer(WandWaitAdjustPayload.TYPE, WandWaitAdjustPayload.STREAM_CODEC, WandWaitAdjustPayload::handle);
         registrar.playToServer(SaveNpcEditorPayload.TYPE, SaveNpcEditorPayload.STREAM_CODEC, SaveNpcEditorPayload::handle);
         registrar.playToServer(SaveNpcDialoguePayload.TYPE, SaveNpcDialoguePayload.STREAM_CODEC, SaveNpcDialoguePayload::handle);
+        registrar.playToServer(SaveNpcGiftEditorPayload.TYPE, SaveNpcGiftEditorPayload.STREAM_CODEC, SaveNpcGiftEditorPayload::handle);
         registrar.playToClient(OpenNpcEditorPayload.TYPE, OpenNpcEditorPayload.STREAM_CODEC, OpenNpcEditorPayload::handle);
         registrar.playToClient(OpenNpcDialogueEditorPayload.TYPE, OpenNpcDialogueEditorPayload.STREAM_CODEC, OpenNpcDialogueEditorPayload::handle);
+        registrar.playToClient(OpenNpcGiftEditorPayload.TYPE, OpenNpcGiftEditorPayload.STREAM_CODEC, OpenNpcGiftEditorPayload::handle);
     }
 }
