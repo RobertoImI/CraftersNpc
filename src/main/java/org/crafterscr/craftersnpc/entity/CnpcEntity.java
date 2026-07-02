@@ -7,6 +7,8 @@ import org.crafterscr.craftersnpc.entity.ai.NpcRouteController;
 import org.crafterscr.craftersnpc.entity.ai.NpcSocialController;
 import org.crafterscr.craftersnpc.storage.NpcDataMigrations;
 import org.crafterscr.craftersnpc.storage.NpcSettingsStorage;
+import org.crafterscr.craftersnpc.gift.NpcGiftData;
+import org.crafterscr.craftersnpc.gift.NpcGiftHandler;
 
 import org.crafterscr.craftersnpc.behavior.action.NpcAction;
 import org.crafterscr.craftersnpc.behavior.action.NpcActionRegistry;
@@ -88,6 +90,7 @@ public class CnpcEntity extends PathfinderMob {
     private int activeRouteActionTicks;
     private String activeScheduleRouteId = "";
     private String dialogueBankId = "";
+    private NpcGiftData giftData = new NpcGiftData();
 
     private NightModeState nightModeState = NightModeState.NONE;
     private int nightRefugeIndex = -1;
@@ -158,8 +161,13 @@ public class CnpcEntity extends PathfinderMob {
 
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
-        // Interaction rule: an empty hand talks; non-empty hands remain available to the future gift system.
         if (!player.getItemInHand(hand).isEmpty()) {
+            if (level().isClientSide) {
+                return giftData.isEnabled() ? InteractionResult.SUCCESS : InteractionResult.PASS;
+            }
+            if (player instanceof ServerPlayer serverPlayer) {
+                return NpcGiftHandler.tryHandle(this, serverPlayer, player.getItemInHand(hand));
+            }
             return InteractionResult.PASS;
         }
         if (level().isClientSide) {
@@ -218,6 +226,18 @@ public class CnpcEntity extends PathfinderMob {
 
     private void setDialogueTicks(int ticks) {
         entityData.set(DIALOGUE_TICKS, Math.max(0, ticks));
+    }
+
+    public NpcGiftData getGiftData() {
+        return giftData;
+    }
+
+    public void setGiftData(NpcGiftData giftData) {
+        this.giftData = giftData == null ? new NpcGiftData() : giftData;
+    }
+
+    public void markGiftDataChanged() {
+        setPersistenceRequired();
     }
 
     public String getDialogueText() {
@@ -1124,6 +1144,7 @@ public class CnpcEntity extends PathfinderMob {
             dialogueTag.add(entry.save());
         }
         tag.put("DialoguePhrases", dialogueTag);
+        tag.put("Gifts", giftData.save());
 
 
         ListTag scheduleTag = new ListTag();
@@ -1189,6 +1210,7 @@ public class CnpcEntity extends PathfinderMob {
         }
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
+        giftData = tag.contains("Gifts", Tag.TAG_COMPOUND) ? NpcGiftData.load(tag.getCompound("Gifts")) : new NpcGiftData();
 
 
         schedule.clear();

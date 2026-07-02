@@ -12,6 +12,7 @@ public final class CnpcCommands {
         dispatcher.register(Commands.literal("cnpc")
             .requires(source -> source.hasPermission(2))
             .then(NpcManagementCommands.register())
+            .then(NpcGiftCommands.register())
             .then(NpcManagementCommands.registerSkinLooked())
             .then(NpcManagementCommands.registerEdit())
             .then(Commands.literal("npc")
