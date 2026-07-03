@@ -21,10 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record SaveNpcGiftEditorPayload(int entityId, boolean enabled, List<String> favoriteItems, List<String> likedItems,
-                                       List<String> dislikedItems, List<NpcGiftReward> rewards, double rewardChance,
+                                       List<NpcGiftReward> rewards, double rewardChance,
                                        int cooldownSeconds, boolean consumeFavorite, boolean consumeLiked,
-                                       boolean consumeDisliked, List<String> favoriteMessages, List<String> likedMessages,
-                                       List<String> dislikedMessages, List<String> unknownMessages, List<String> cooldownMessages,
+                                       List<String> favoriteMessages, List<String> likedMessages, List<String> unknownMessages, List<String> cooldownMessages,
                                        List<String> rewardMessages, List<String> noRewardMessages) implements CustomPacketPayload {
     public static final Type<SaveNpcGiftEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "save_npc_gift_editor"));
     public static final StreamCodec<FriendlyByteBuf, SaveNpcGiftEditorPayload> STREAM_CODEC = StreamCodec.of(
@@ -33,7 +32,6 @@ public record SaveNpcGiftEditorPayload(int entityId, boolean enabled, List<Strin
                 buf.writeBoolean(payload.enabled());
                 writeStrings(buf, payload.favoriteItems());
                 writeStrings(buf, payload.likedItems());
-                writeStrings(buf, payload.dislikedItems());
                 buf.writeVarInt(payload.rewards().size());
                 for (NpcGiftReward reward : payload.rewards()) {
                     buf.writeUtf(reward.item(), 128);
@@ -45,18 +43,16 @@ public record SaveNpcGiftEditorPayload(int entityId, boolean enabled, List<Strin
                 buf.writeVarInt(payload.cooldownSeconds());
                 buf.writeBoolean(payload.consumeFavorite());
                 buf.writeBoolean(payload.consumeLiked());
-                buf.writeBoolean(payload.consumeDisliked());
                 writeStrings(buf, payload.favoriteMessages());
                 writeStrings(buf, payload.likedMessages());
-                writeStrings(buf, payload.dislikedMessages());
                 writeStrings(buf, payload.unknownMessages());
                 writeStrings(buf, payload.cooldownMessages());
                 writeStrings(buf, payload.rewardMessages());
                 writeStrings(buf, payload.noRewardMessages());
             },
-            buf -> new SaveNpcGiftEditorPayload(buf.readInt(), buf.readBoolean(), readStrings(buf, 128), readStrings(buf, 128), readStrings(buf, 128), readRewards(buf),
-                    buf.readDouble(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), readStrings(buf, 256), readStrings(buf, 256),
-                    readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256)));
+            buf -> new SaveNpcGiftEditorPayload(buf.readInt(), buf.readBoolean(), readStrings(buf, 128), readStrings(buf, 128), readRewards(buf),
+                    buf.readDouble(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), readStrings(buf, 256), readStrings(buf, 256),
+                    readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256)));
 
     @Override
     public Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -76,10 +72,8 @@ public record SaveNpcGiftEditorPayload(int entityId, boolean enabled, List<Strin
         data.setEnabled(payload.enabled());
         data.favoriteItems().clear();
         data.likedItems().clear();
-        data.dislikedItems().clear();
         addValidItems(data, NpcGiftData.Category.FAVORITE, payload.favoriteItems());
         addValidItems(data, NpcGiftData.Category.LIKED, payload.likedItems());
-        addValidItems(data, NpcGiftData.Category.DISLIKED, payload.dislikedItems());
         data.rewardPool().clear();
         for (NpcGiftReward reward : payload.rewards()) {
             if (isValidItem(reward.item())) data.rewardPool().add(new NpcGiftReward(reward.item(), Math.max(1, reward.min()), Math.max(Math.max(1, reward.min()), reward.max()), Math.max(1, reward.weight())));
@@ -88,10 +82,8 @@ public record SaveNpcGiftEditorPayload(int entityId, boolean enabled, List<Strin
         data.setCooldownSeconds(payload.cooldownSeconds());
         data.setConsumeFavorite(payload.consumeFavorite());
         data.setConsumeLiked(payload.consumeLiked());
-        data.setConsumeDisliked(payload.consumeDisliked());
         replaceMessages(data.messages(), "favorite", payload.favoriteMessages());
         replaceMessages(data.messages(), "liked", payload.likedMessages());
-        replaceMessages(data.messages(), "disliked", payload.dislikedMessages());
         replaceMessages(data.messages(), "unknown", payload.unknownMessages());
         replaceMessages(data.messages(), "cooldown", payload.cooldownMessages());
         replaceMessages(data.messages(), "reward", payload.rewardMessages());

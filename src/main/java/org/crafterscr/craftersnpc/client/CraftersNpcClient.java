@@ -19,6 +19,7 @@ public final class CraftersNpcClient {
         modEventBus.addListener(CraftersNpcClient::onClientSetup);
         RouteWandKeybinds.register(modEventBus);
         NeoForge.EVENT_BUS.addListener(RouteWandKeybinds::onClientTick);
+        NeoForge.EVENT_BUS.addListener(GiftIconOverlay::onRenderGui);
     }
 
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {

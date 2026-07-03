@@ -26,16 +26,13 @@ public class NpcGiftEditorScreen extends Screen {
     private Checkbox enabled;
     private Checkbox consumeFavorite;
     private Checkbox consumeLiked;
-    private Checkbox consumeDisliked;
     private EditBox favoriteItems;
     private EditBox likedItems;
-    private EditBox dislikedItems;
     private EditBox rewardChance;
     private EditBox cooldownSeconds;
     private EditBox rewards;
     private EditBox favoriteMessages;
     private EditBox likedMessages;
-    private EditBox dislikedMessages;
     private EditBox unknownMessages;
     private EditBox cooldownMessages;
     private EditBox rewardMessages;
@@ -75,13 +72,10 @@ public class NpcGiftEditorScreen extends Screen {
     private void initItems(int x, int y) {
         favoriteItems = box(favoriteItems, join(initial.favoriteItems()), x, y + 14, 330, "minecraft:diamond, minecraft:emerald");
         likedItems = box(likedItems, join(initial.likedItems()), x, y + 54, 330, "minecraft:bread, minecraft:apple");
-        dislikedItems = box(dislikedItems, join(initial.dislikedItems()), x, y + 94, 330, "minecraft:rotten_flesh");
         consumeFavorite = Checkbox.builder(Component.literal("Consumir favoritos"), font).pos(x, y + 126).selected(consumeFavorite == null ? initial.consumeFavorite() : consumeFavorite.selected()).build();
         consumeLiked = Checkbox.builder(Component.literal("Consumir gustados"), font).pos(x + 130, y + 126).selected(consumeLiked == null ? initial.consumeLiked() : consumeLiked.selected()).build();
-        consumeDisliked = Checkbox.builder(Component.literal("Consumir disgustados"), font).pos(x + 260, y + 126).selected(consumeDisliked == null ? initial.consumeDisliked() : consumeDisliked.selected()).build();
         addRenderableWidget(consumeFavorite);
         addRenderableWidget(consumeLiked);
-        addRenderableWidget(consumeDisliked);
     }
 
     private void initRewards(int x, int y) {
@@ -93,11 +87,10 @@ public class NpcGiftEditorScreen extends Screen {
     private void initMessages(int x, int y) {
         favoriteMessages = box(favoriteMessages, joinMessages(initial.favoriteMessages()), x, y + 14, 340, "frase 1 | frase 2");
         likedMessages = box(likedMessages, joinMessages(initial.likedMessages()), x, y + 44, 340, "frase 1 | frase 2");
-        dislikedMessages = box(dislikedMessages, joinMessages(initial.dislikedMessages()), x, y + 74, 340, "frase 1 | frase 2");
-        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 104, 340, "frase 1 | frase 2");
-        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 134, 340, "frase 1 | frase 2");
-        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 164, 165, "frase 1 | frase 2");
-        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 175, y + 164, 165, "frase 1 | frase 2");
+        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 74, 340, "frase 1 | frase 2");
+        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 104, 340, "frase 1 | frase 2");
+        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 134, 165, "frase 1 | frase 2");
+        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 175, y + 134, 165, "frase 1 | frase 2");
     }
 
     private EditBox box(EditBox existing, String value, int x, int y, int width, String hint) {
@@ -114,7 +107,7 @@ public class NpcGiftEditorScreen extends Screen {
     }
 
     private void save() {
-        PacketDistributor.sendToServer(new SaveNpcGiftEditorPayload(initial.entityId(), enabled.selected(), splitCsv(value(favoriteItems)), splitCsv(value(likedItems)), splitCsv(value(dislikedItems)), parseRewards(value(rewards)), parseDouble(value(rewardChance), initial.rewardChance()), parseInt(value(cooldownSeconds), initial.cooldownSeconds()), selected(consumeFavorite, initial.consumeFavorite()), selected(consumeLiked, initial.consumeLiked()), selected(consumeDisliked, initial.consumeDisliked()), splitMessages(value(favoriteMessages)), splitMessages(value(likedMessages)), splitMessages(value(dislikedMessages)), splitMessages(value(unknownMessages)), splitMessages(value(cooldownMessages)), splitMessages(value(rewardMessages)), splitMessages(value(noRewardMessages))));
+        PacketDistributor.sendToServer(new SaveNpcGiftEditorPayload(initial.entityId(), enabled.selected(), splitCsv(value(favoriteItems)), splitCsv(value(likedItems)), parseRewards(value(rewards)), parseDouble(value(rewardChance), initial.rewardChance()), parseInt(value(cooldownSeconds), initial.cooldownSeconds()), selected(consumeFavorite, initial.consumeFavorite()), selected(consumeLiked, initial.consumeLiked()), splitMessages(value(favoriteMessages)), splitMessages(value(likedMessages)), splitMessages(value(unknownMessages)), splitMessages(value(cooldownMessages)), splitMessages(value(rewardMessages)), splitMessages(value(noRewardMessages))));
         onClose();
     }
 
@@ -157,7 +150,6 @@ public class NpcGiftEditorScreen extends Screen {
         if (page == Page.ITEMS) {
             graphics.drawString(font, "Favoritos (IDs separados por coma)", x, y + 23, 0xA0FFA0);
             graphics.drawString(font, "Gustan (IDs separados por coma)", x, y + 63, 0xA0A0FF);
-            graphics.drawString(font, "Disgustan (IDs separados por coma)", x, y + 103, 0xFFA0A0);
         } else if (page == Page.REWARDS) {
             graphics.drawString(font, "Prob. recompensa %", x, y + 23, 0xA0A0A0);
             graphics.drawString(font, "Cooldown", x + 110, y + 23, 0xA0A0A0);
@@ -166,10 +158,9 @@ public class NpcGiftEditorScreen extends Screen {
             graphics.drawString(font, "Mensajes separados con | para cada resultado", x, y + 23, 0xA0A0A0);
             graphics.drawString(font, "favorite", x + 345, y + 47, 0xA0FFA0);
             graphics.drawString(font, "liked", x + 345, y + 77, 0xA0A0FF);
-            graphics.drawString(font, "disliked", x + 345, y + 107, 0xFFA0A0);
-            graphics.drawString(font, "unknown", x + 345, y + 137, 0xA0A0A0);
-            graphics.drawString(font, "cooldown", x + 345, y + 167, 0xA0A0A0);
-            graphics.drawString(font, "reward / noReward", x, y + 187, 0xA0A0A0);
+            graphics.drawString(font, "unknown", x + 345, y + 107, 0xA0A0A0);
+            graphics.drawString(font, "cooldown", x + 345, y + 137, 0xA0A0A0);
+            graphics.drawString(font, "reward / noReward", x, y + 157, 0xA0A0A0);
         }
     }
 }

@@ -15,11 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record OpenNpcGiftEditorPayload(int entityId, String npcId, boolean enabled, List<String> favoriteItems,
-                                       List<String> likedItems, List<String> dislikedItems, List<NpcGiftReward> rewards,
+                                       List<String> likedItems, List<NpcGiftReward> rewards,
                                        double rewardChance, int cooldownSeconds, boolean consumeFavorite,
-                                       boolean consumeLiked, boolean consumeDisliked, List<String> favoriteMessages,
-                                       List<String> likedMessages, List<String> dislikedMessages,
-                                       List<String> unknownMessages, List<String> cooldownMessages,
+                                       boolean consumeLiked, List<String> favoriteMessages,
+                                       List<String> likedMessages, List<String> unknownMessages, List<String> cooldownMessages,
                                        List<String> rewardMessages, List<String> noRewardMessages) implements CustomPacketPayload {
     public static final Type<OpenNpcGiftEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "open_npc_gift_editor"));
     public static final StreamCodec<FriendlyByteBuf, OpenNpcGiftEditorPayload> STREAM_CODEC = StreamCodec.of(
@@ -29,7 +28,6 @@ public record OpenNpcGiftEditorPayload(int entityId, String npcId, boolean enabl
                 buf.writeBoolean(payload.enabled());
                 writeStrings(buf, payload.favoriteItems());
                 writeStrings(buf, payload.likedItems());
-                writeStrings(buf, payload.dislikedItems());
                 buf.writeVarInt(payload.rewards().size());
                 for (NpcGiftReward reward : payload.rewards()) {
                     buf.writeUtf(reward.item(), 128);
@@ -41,10 +39,8 @@ public record OpenNpcGiftEditorPayload(int entityId, String npcId, boolean enabl
                 buf.writeVarInt(payload.cooldownSeconds());
                 buf.writeBoolean(payload.consumeFavorite());
                 buf.writeBoolean(payload.consumeLiked());
-                buf.writeBoolean(payload.consumeDisliked());
                 writeStrings(buf, payload.favoriteMessages());
                 writeStrings(buf, payload.likedMessages());
-                writeStrings(buf, payload.dislikedMessages());
                 writeStrings(buf, payload.unknownMessages());
                 writeStrings(buf, payload.cooldownMessages());
                 writeStrings(buf, payload.rewardMessages());
@@ -56,15 +52,14 @@ public record OpenNpcGiftEditorPayload(int entityId, String npcId, boolean enabl
                 boolean enabled = buf.readBoolean();
                 List<String> favoriteItems = readStrings(buf, 128);
                 List<String> likedItems = readStrings(buf, 128);
-                List<String> dislikedItems = readStrings(buf, 128);
                 int rewardCount = Math.min(buf.readVarInt(), 256);
                 List<NpcGiftReward> rewards = new ArrayList<>(rewardCount);
                 for (int index = 0; index < rewardCount; index++) {
                     rewards.add(new NpcGiftReward(buf.readUtf(128), buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
                 }
-                return new OpenNpcGiftEditorPayload(entityId, npcId, enabled, favoriteItems, likedItems, dislikedItems, rewards,
-                        buf.readDouble(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
-                        readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256),
+                return new OpenNpcGiftEditorPayload(entityId, npcId, enabled, favoriteItems, likedItems, rewards,
+                        buf.readDouble(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(),
+                        readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256),
                         readStrings(buf, 256), readStrings(buf, 256), readStrings(buf, 256));
             });
 

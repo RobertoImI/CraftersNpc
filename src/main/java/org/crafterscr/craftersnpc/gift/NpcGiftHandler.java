@@ -18,24 +18,24 @@ public final class NpcGiftHandler {
     public static InteractionResult tryHandle(CnpcEntity npc, ServerPlayer player, ItemStack stack) {
         NpcGiftData data = npc.getGiftData();
         if (!data.isEnabled() || stack.isEmpty()) return InteractionResult.PASS;
-        if (NpcGiftCooldownManager.isCoolingDown(npc.getUUID())) { speak(npc, player, data, "cooldown"); return InteractionResult.CONSUME; }
         String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         NpcGiftData.Category cat = data.categoryOf(itemId);
-        if (cat == NpcGiftData.Category.UNKNOWN) { speak(npc, player, data, "unknown"); return InteractionResult.CONSUME; }
+        if (cat == NpcGiftData.Category.UNKNOWN) { speakOptional(npc, player, data, "unknown"); return InteractionResult.PASS; }
+        if (NpcGiftCooldownManager.isCoolingDown(npc.getUUID())) { speak(npc, player, data, "cooldown"); return InteractionResult.CONSUME; }
         if (!player.getAbilities().instabuild && data.shouldConsume(cat)) stack.shrink(1);
-        String type = cat == NpcGiftData.Category.FAVORITE ? "favorite" : cat == NpcGiftData.Category.LIKED ? "liked" : "disliked";
+        String type = cat == NpcGiftData.Category.FAVORITE ? "favorite" : "liked";
         speak(npc, player, data, type);
         effects(npc, cat);
         NpcGiftCooldownManager.start(npc.getUUID(), data.cooldownSeconds());
-        if (cat == NpcGiftData.Category.FAVORITE || cat == NpcGiftData.Category.LIKED) reward(npc, player, data);
+        reward(npc, player, data);
         return InteractionResult.CONSUME;
     }
     private static void speak(CnpcEntity npc, ServerPlayer player, NpcGiftData data, String type) { npc.startDialogue(data.messages().random(type, npc.getRandom()), 60, player); }
+    private static void speakOptional(CnpcEntity npc, ServerPlayer player, NpcGiftData data, String type) { data.messages().randomOptional(type, npc.getRandom()).ifPresent(text -> npc.startDialogue(text, 60, player)); }
     private static void effects(CnpcEntity npc, NpcGiftData.Category cat) {
         if (!(npc.level() instanceof ServerLevel level)) return;
         if (cat == NpcGiftData.Category.FAVORITE) { level.sendParticles(ParticleTypes.HEART, npc.getX(), npc.getY()+1.8, npc.getZ(), 6, .4, .4, .4, .02); level.playSound(null, npc.blockPosition(), SoundEvents.VILLAGER_YES, SoundSource.NEUTRAL, 1f, 1.2f); }
         else if (cat == NpcGiftData.Category.LIKED) { level.sendParticles(ParticleTypes.HAPPY_VILLAGER, npc.getX(), npc.getY()+1.5, npc.getZ(), 8, .4, .4, .4, .02); level.playSound(null, npc.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.NEUTRAL, .6f, 1.1f); }
-        else if (cat == NpcGiftData.Category.DISLIKED) { level.sendParticles(ParticleTypes.ANGRY_VILLAGER, npc.getX(), npc.getY()+1.6, npc.getZ(), 4, .3, .3, .3, .01); level.playSound(null, npc.blockPosition(), SoundEvents.VILLAGER_NO, SoundSource.NEUTRAL, 1f, .8f); }
     }
     private static void reward(CnpcEntity npc, ServerPlayer player, NpcGiftData data) {
         if (data.rewardChance() <= 0 || data.rewardPool().isEmpty() || npc.getRandom().nextDouble() * 100D >= data.rewardChance()) { speak(npc, player, data, "noReward"); return; }

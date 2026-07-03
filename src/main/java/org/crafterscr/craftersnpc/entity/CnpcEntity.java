@@ -67,6 +67,9 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> DIALOGUE_TEXT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DIALOGUE_TICKS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> GIFTS_ENABLED = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<String> GIFT_LIKED_ITEMS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> GIFT_FAVORITE_ITEMS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
 
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
@@ -143,6 +146,9 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
         builder.define(DIALOGUE_TEXT, "");
         builder.define(DIALOGUE_TICKS, 0);
+        builder.define(GIFTS_ENABLED, false);
+        builder.define(GIFT_LIKED_ITEMS, "");
+        builder.define(GIFT_FAVORITE_ITEMS, "");
     }
 
     @Override
@@ -163,7 +169,7 @@ public class CnpcEntity extends PathfinderMob {
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!player.getItemInHand(hand).isEmpty()) {
             if (level().isClientSide) {
-                return giftData.isEnabled() ? InteractionResult.SUCCESS : InteractionResult.PASS;
+                return acceptsGiftClient(player.getItemInHand(hand)) ? InteractionResult.SUCCESS : InteractionResult.PASS;
             }
             if (player instanceof ServerPlayer serverPlayer) {
                 return NpcGiftHandler.tryHandle(this, serverPlayer, player.getItemInHand(hand));
@@ -234,10 +240,30 @@ public class CnpcEntity extends PathfinderMob {
 
     public void setGiftData(NpcGiftData giftData) {
         this.giftData = giftData == null ? new NpcGiftData() : giftData;
+        syncGiftDataToClient();
     }
 
     public void markGiftDataChanged() {
+        syncGiftDataToClient();
         setPersistenceRequired();
+    }
+
+    public boolean acceptsGiftClient(net.minecraft.world.item.ItemStack stack) {
+        if (stack.isEmpty() || !entityData.get(GIFTS_ENABLED)) return false;
+        String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        return containsSyncedGiftItem(entityData.get(GIFT_LIKED_ITEMS), itemId) || containsSyncedGiftItem(entityData.get(GIFT_FAVORITE_ITEMS), itemId);
+    }
+
+    private void syncGiftDataToClient() {
+        entityData.set(GIFTS_ENABLED, giftData.isEnabled());
+        entityData.set(GIFT_LIKED_ITEMS, String.join(",", giftData.likedItems()));
+        entityData.set(GIFT_FAVORITE_ITEMS, String.join(",", giftData.favoriteItems()));
+    }
+
+    private static boolean containsSyncedGiftItem(String csv, String itemId) {
+        if (csv.isBlank()) return false;
+        for (String value : csv.split(",")) if (value.equals(itemId)) return true;
+        return false;
     }
 
     public String getDialogueText() {
@@ -1211,6 +1237,7 @@ public class CnpcEntity extends PathfinderMob {
         setLastDialoguePhraseIndex(-1);
         clearDialogue();
         giftData = tag.contains("Gifts", Tag.TAG_COMPOUND) ? NpcGiftData.load(tag.getCompound("Gifts")) : new NpcGiftData();
+        syncGiftDataToClient();
 
 
         schedule.clear();
