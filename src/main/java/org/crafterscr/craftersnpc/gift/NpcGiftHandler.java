@@ -10,8 +10,10 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 public final class NpcGiftHandler {
     private NpcGiftHandler() {}
@@ -50,11 +52,31 @@ public final class NpcGiftHandler {
                 Item item = BuiltInRegistries.ITEM.get(id);
                 int count = r.min() + npc.getRandom().nextInt(Math.max(1, r.max() - r.min() + 1));
                 ItemStack reward = new ItemStack(item, count);
-                if (!player.getInventory().add(reward)) player.drop(reward, false);
+                dropRewardNearNpc(npc, player, reward);
                 speak(npc, player, data, "reward");
-                npc.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, .8f, 1f);
+                npc.level().playSound(null, npc.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, .8f, 1f);
                 return;
             }
         }
+    }
+
+    private static void dropRewardNearNpc(CnpcEntity npc, ServerPlayer player, ItemStack reward) {
+        if (!(npc.level() instanceof ServerLevel level) || reward.isEmpty()) return;
+        Vec3 lookDirection = npc.getLookAngle();
+        if (lookDirection.lengthSqr() < 0.01D) {
+            lookDirection = player.position().subtract(npc.position());
+        }
+        Vec3 horizontalDirection = new Vec3(lookDirection.x, 0.0D, lookDirection.z);
+        if (horizontalDirection.lengthSqr() < 0.01D) {
+            horizontalDirection = new Vec3(0.0D, 0.0D, 1.0D);
+        } else {
+            horizontalDirection = horizontalDirection.normalize();
+        }
+
+        Vec3 dropPosition = npc.position().add(horizontalDirection.scale(0.75D)).add(0.0D, 0.8D, 0.0D);
+        ItemEntity entity = new ItemEntity(level, dropPosition.x, dropPosition.y, dropPosition.z, reward);
+        entity.setDeltaMovement(horizontalDirection.scale(0.08D).add(0.0D, 0.18D, 0.0D));
+        entity.setDefaultPickUpDelay();
+        level.addFreshEntity(entity);
     }
 }

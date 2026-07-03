@@ -21,8 +21,8 @@ public final class GiftIconOverlay {
         if (!(minecraft.hitResult instanceof EntityHitResult entityHit) || !(entityHit.getEntity() instanceof CnpcEntity npc)) return;
         if (!npc.acceptsGiftClient(minecraft.player.getMainHandItem())) return;
         GuiGraphics graphics = event.getGuiGraphics();
-        int x = graphics.guiWidth() / 2 + 10;
-        int y = graphics.guiHeight() / 2 - 8;
+        int x = graphics.guiWidth() / 2 - SIZE / 2;
+        int y = graphics.guiHeight() / 2 - SIZE / 2;
         graphics.blit(GIFT_ICON, x, y, 0, 0, SIZE, SIZE, SIZE, SIZE);
     }
 }
