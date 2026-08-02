@@ -50,16 +50,19 @@ public class NpcDialogueEditorScreen extends Screen {
         int left = 18;
         int editorX = width / 2 + 8;
         int top = 34;
-        bankButton = Button.builder(Component.literal(displayBank()), b -> cycleBank()).bounds(editorX, top, 210, 20).build();
+        int editorWidth = Math.max(180, width / 2 - 26);
+        bankButton = Button.builder(Component.literal(displayBank()), b -> cycleBank()).bounds(editorX, top, editorWidth, 20).build();
         addRenderableWidget(bankButton);
-        modeButton = Button.builder(Component.literal(displayMode()), b -> toggleMode()).bounds(editorX, top + 24, 210, 20).build();
+        modeButton = Button.builder(Component.literal(displayMode()), b -> toggleMode()).bounds(editorX, top + 24, editorWidth, 20).build();
         addRenderableWidget(modeButton);
-        text = new MultiLineEditBox(Minecraft.getInstance().font, editorX, top + 58, 210, 80, Component.literal("Texto"), Component.literal("Escribe una frase larga o párrafo"));
+        text = new MultiLineEditBox(Minecraft.getInstance().font, editorX, top + 62, editorWidth, 80, Component.literal("Texto"), Component.literal("Escribe una frase larga o párrafo"));
         text.setCharacterLimit(CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH);
         addRenderableWidget(text);
-        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 144, 70, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + 76, top + 144, 64, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + 146, top + 144, 64, 20).build());
+        int smallGap = 6;
+        int smallWidth = (editorWidth - smallGap * 2) / 3;
+        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 148, smallWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + smallWidth + smallGap, top + 148, smallWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + (smallWidth + smallGap) * 2, top + 148, smallWidth, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↑"), b -> moveSelected(-1)).bounds(left, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↓"), b -> moveSelected(1)).bounds(left + 28, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, height - 28, 100, 20).build());
@@ -132,13 +135,20 @@ public class NpcDialogueEditorScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
         List<DialogueEntry> active = activeEntries();
-        graphics.drawString(font, title.getString() + ": " + npcId, 18, 14, 0xFFFFFF);
+        int listX = 18;
+        int listW = width / 2 - 36;
+        int editorX = width / 2 + 8;
+        int editorWidth = Math.max(180, width / 2 - 26);
+        NpcUiTheme.panel(graphics, 10, 8, width - 20, height - 44);
+        NpcUiTheme.title(graphics, font, Component.literal(title.getString() + ": " + npcId), width / 2, 15);
+        NpcUiTheme.section(graphics, listX - 6, 30, listW + 12, height - 104);
+        NpcUiTheme.section(graphics, editorX - 6, 30, editorWidth + 12, 180);
         String label = editingBank ? "frases del banco " + bankValue : "frases propias";
-        graphics.drawString(font, active.size() + "/" + activeLimit() + " " + label + " | Bancos: " + (bankIds.isEmpty() ? "ninguno" : String.join(", ", bankIds)), 18, height - 70, 0xA0A0A0);
-        graphics.drawString(font, "Texto (hasta " + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH + " caracteres):", width / 2 + 8, 86, 0xA0A0A0);
-        int listX = 18, y = 34, listW = width / 2 - 36;
+        String status = active.size() + "/" + activeLimit() + " " + label + " · Bancos: " + (bankIds.isEmpty() ? "ninguno" : String.join(", ", bankIds));
+        NpcUiTheme.label(graphics, font, font.plainSubstrByWidth(status, width - 36), 18, height - 70);
+        NpcUiTheme.label(graphics, font, "Texto (máx. " + CnpcEntity.MAX_DIALOGUE_PHRASE_LENGTH + " caracteres)", editorX, 84);
+        int y = 34;
         int maxRows = Math.max(1, (height - 104) / 24);
         for (int i = 0; i < maxRows && scroll + i < active.size(); i++) {
             int index = scroll + i;
@@ -149,5 +159,6 @@ public class NpcDialogueEditorScreen extends Screen {
             if (!lines.isEmpty()) graphics.drawString(font, lines.get(0), listX + 4, rowY + 2, 0xFFFFFF);
             if (lines.size() > 1) graphics.drawString(font, lines.get(1), listX + 4, rowY + 12, 0xDDDDDD);
         }
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 }

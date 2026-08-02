@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Locale;
 
 public class NpcEditorScreen extends Screen {
+    private static final int PANEL_WIDTH = 360;
+    private static final int PANEL_HEIGHT = 238;
     private final int entityId;
     private final boolean initialSlimModel;
     private final boolean initialNightMode;
@@ -63,24 +65,29 @@ public class NpcEditorScreen extends Screen {
 
     @Override
     protected void init() {
-        int x = width / 2 - 110;
-        int y = height / 2 - 105;
-        addLabeledBox(npcId, x, y + 14);
-        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 44, 120, 20).build();
+        int panelX = (width - PANEL_WIDTH) / 2;
+        int panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        int x = panelX + 18;
+        int y = panelY + 38;
+        int columnWidth = 152;
+        addLabeledBox(npcId, x, y + 12, columnWidth);
+        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 48, columnWidth, 20).build();
         addRenderableWidget(skinButton);
-        addLabeledBox(speed, x, y + 74);
-        routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 104, 120, 20).build();
+        addLabeledBox(speed, x, y + 84, columnWidth);
+        routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 120, columnWidth, 20).build();
         addRenderableWidget(routeButton);
-        slimModel = Checkbox.builder(Component.literal("Modelo slim"), font).pos(x + 135, y + 14).selected(this.slimModel == null ? initialSlimModel : this.slimModel.selected()).build();
-        nightMode = Checkbox.builder(Component.literal("Modo nocturno"), font).pos(x + 135, y + 44).selected(this.nightMode == null ? initialNightMode : this.nightMode.selected()).build();
+        int rightX = x + 174;
+        slimModel = Checkbox.builder(Component.literal("Modelo slim"), font).pos(rightX, y + 12).selected(this.slimModel == null ? initialSlimModel : this.slimModel.selected()).build();
+        nightMode = Checkbox.builder(Component.literal("Modo nocturno"), font).pos(rightX, y + 48).selected(this.nightMode == null ? initialNightMode : this.nightMode.selected()).build();
         addRenderableWidget(slimModel);
         addRenderableWidget(nightMode);
-        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id()), b -> cycleTemperament(b)).bounds(x + 135, y + 74, 130, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, y + 145, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, y + 145, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Temperamento: " + temperament.id()), b -> cycleTemperament(b)).bounds(rightX, y + 84, 150, 20).build());
+        int footerY = panelY + PANEL_HEIGHT - 32;
+        addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, footerY, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, footerY, 100, 20).build());
     }
 
-    private void addLabeledBox(EditBox box, int x, int y) { box.setX(x); box.setY(y); addRenderableWidget(box); }
+    private void addLabeledBox(EditBox box, int x, int y, int width) { box.setX(x); box.setY(y); box.setWidth(width); addRenderableWidget(box); }
     private String displayValue(String value, String emptyLabel) { return value == null || value.isBlank() ? emptyLabel : value; }
     private void cycleSkin() { skinId = nextOption(skinOptions, skinId); skinButton.setMessage(Component.literal(displayValue(skinId, "(sin skin)"))); }
     private void cycleRoute() { routeId = nextOption(routeOptions, routeId); routeButton.setMessage(Component.literal(displayValue(routeId, "(sin ruta)"))); }
@@ -103,13 +110,18 @@ public class NpcEditorScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
+        int panelX = (width - PANEL_WIDTH) / 2;
+        int panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        int x = panelX + 18;
+        int y = panelY + 38;
+        NpcUiTheme.panel(graphics, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
+        NpcUiTheme.title(graphics, font, title, width / 2, panelY + 12);
+        NpcUiTheme.section(graphics, x - 7, y - 7, 166, 154);
+        NpcUiTheme.section(graphics, x + 167, y - 7, 168, 118);
+        NpcUiTheme.label(graphics, font, "Id del NPC", x, y);
+        NpcUiTheme.label(graphics, font, "Skin", x, y + 36);
+        NpcUiTheme.label(graphics, font, "Velocidad", x, y + 72);
+        NpcUiTheme.label(graphics, font, "Ruta asignada", x, y + 108);
         super.render(graphics, mouseX, mouseY, partialTick);
-        int x = width / 2 - 110;
-        int y = height / 2 - 105;
-        graphics.drawString(font, title, width / 2 - font.width(title) / 2, y - 12, 0xFFFFFF);
-        graphics.drawString(font, "Id del NPC", x, y + 3, 0xA0A0A0);
-        graphics.drawString(font, "Skin", x, y + 33, 0xA0A0A0);
-        graphics.drawString(font, "Velocidad", x, y + 63, 0xA0A0A0);
-        graphics.drawString(font, "Ruta asignada", x, y + 93, 0xA0A0A0);
     }
 }

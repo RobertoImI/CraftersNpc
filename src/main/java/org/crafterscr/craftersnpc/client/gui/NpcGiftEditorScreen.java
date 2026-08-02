@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 
 public class NpcGiftEditorScreen extends Screen {
+    private static final int PANEL_WIDTH = 420;
+    private static final int PANEL_HEIGHT = 286;
     private enum Page { ITEMS, REWARDS, MESSAGES }
 
     private final OpenNpcGiftEditorPayload initial;
@@ -50,18 +52,28 @@ public class NpcGiftEditorScreen extends Screen {
 
     private void refreshWidgets() {
         clearWidgets();
-        int x = width / 2 - 170;
-        int y = height / 2 - 112;
-        addRenderableWidget(Button.builder(Component.literal("Items"), b -> switchPage(Page.ITEMS)).bounds(x, y, 75, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Recompensas"), b -> switchPage(Page.REWARDS)).bounds(x + 80, y, 105, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Mensajes"), b -> switchPage(Page.MESSAGES)).bounds(x + 190, y, 85, 20).build());
-        enabled = Checkbox.builder(Component.literal("Sistema activo"), font).pos(x + 280, y + 2).selected(enabled == null ? initial.enabled() : enabled.selected()).build();
+        int panelX = (width - PANEL_WIDTH) / 2;
+        int panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        int x = panelX + 14;
+        int tabsY = panelY + 34;
+        Button itemsTab = Button.builder(Component.literal("Items"), b -> switchPage(Page.ITEMS)).bounds(x, tabsY, 82, 20).build();
+        Button rewardsTab = Button.builder(Component.literal("Recompensas"), b -> switchPage(Page.REWARDS)).bounds(x + 86, tabsY, 108, 20).build();
+        Button messagesTab = Button.builder(Component.literal("Mensajes"), b -> switchPage(Page.MESSAGES)).bounds(x + 198, tabsY, 88, 20).build();
+        itemsTab.active = page != Page.ITEMS;
+        rewardsTab.active = page != Page.REWARDS;
+        messagesTab.active = page != Page.MESSAGES;
+        addRenderableWidget(itemsTab);
+        addRenderableWidget(rewardsTab);
+        addRenderableWidget(messagesTab);
+        enabled = Checkbox.builder(Component.literal("Activo"), font).pos(x + 298, tabsY).selected(enabled == null ? initial.enabled() : enabled.selected()).build();
         addRenderableWidget(enabled);
-        if (page == Page.ITEMS) initItems(x, y + 32);
-        if (page == Page.REWARDS) initRewards(x, y + 32);
-        if (page == Page.MESSAGES) initMessages(x, y + 32);
-        addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, y + 220, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, y + 220, 100, 20).build());
+        int contentY = tabsY + 34;
+        if (page == Page.ITEMS) initItems(x + 8, contentY);
+        if (page == Page.REWARDS) initRewards(x + 8, contentY);
+        if (page == Page.MESSAGES) initMessages(x + 8, contentY);
+        int footerY = panelY + PANEL_HEIGHT - 30;
+        addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, footerY, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Cancelar"), b -> onClose()).bounds(width / 2 + 5, footerY, 100, 20).build());
     }
 
     private void switchPage(Page page) {
@@ -70,27 +82,27 @@ public class NpcGiftEditorScreen extends Screen {
     }
 
     private void initItems(int x, int y) {
-        favoriteItems = box(favoriteItems, join(initial.favoriteItems()), x, y + 14, 330, "minecraft:diamond, minecraft:emerald");
-        likedItems = box(likedItems, join(initial.likedItems()), x, y + 54, 330, "minecraft:bread, minecraft:apple");
-        consumeFavorite = Checkbox.builder(Component.literal("Consumir favoritos"), font).pos(x, y + 126).selected(consumeFavorite == null ? initial.consumeFavorite() : consumeFavorite.selected()).build();
-        consumeLiked = Checkbox.builder(Component.literal("Consumir gustados"), font).pos(x + 130, y + 126).selected(consumeLiked == null ? initial.consumeLiked() : consumeLiked.selected()).build();
+        favoriteItems = box(favoriteItems, join(initial.favoriteItems()), x, y + 12, 376, "minecraft:diamond, minecraft:emerald");
+        likedItems = box(likedItems, join(initial.likedItems()), x, y + 52, 376, "minecraft:bread, minecraft:apple");
+        consumeFavorite = Checkbox.builder(Component.literal("Consumir favoritos"), font).pos(x, y + 88).selected(consumeFavorite == null ? initial.consumeFavorite() : consumeFavorite.selected()).build();
+        consumeLiked = Checkbox.builder(Component.literal("Consumir gustados"), font).pos(x + 190, y + 88).selected(consumeLiked == null ? initial.consumeLiked() : consumeLiked.selected()).build();
         addRenderableWidget(consumeFavorite);
         addRenderableWidget(consumeLiked);
     }
 
     private void initRewards(int x, int y) {
-        rewardChance = box(rewardChance, String.format(Locale.ROOT, "%.2f", initial.rewardChance()), x, y + 14, 90, "0-100");
-        cooldownSeconds = box(cooldownSeconds, Integer.toString(initial.cooldownSeconds()), x + 110, y + 14, 90, "segundos");
-        rewards = box(rewards, rewardsText(initial.rewards()), x, y + 58, 340, "item:min:max:peso; item:min:max:peso");
+        rewardChance = box(rewardChance, String.format(Locale.ROOT, "%.2f", initial.rewardChance()), x, y + 12, 120, "0-100");
+        cooldownSeconds = box(cooldownSeconds, Integer.toString(initial.cooldownSeconds()), x + 140, y + 12, 120, "segundos");
+        rewards = box(rewards, rewardsText(initial.rewards()), x, y + 56, 376, "item:min:max:peso; item:min:max:peso");
     }
 
     private void initMessages(int x, int y) {
-        favoriteMessages = box(favoriteMessages, joinMessages(initial.favoriteMessages()), x, y + 14, 340, "frase 1 | frase 2");
-        likedMessages = box(likedMessages, joinMessages(initial.likedMessages()), x, y + 44, 340, "frase 1 | frase 2");
-        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 74, 340, "frase 1 | frase 2");
-        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 104, 340, "frase 1 | frase 2");
-        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 134, 165, "frase 1 | frase 2");
-        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 175, y + 134, 165, "frase 1 | frase 2");
+        favoriteMessages = box(favoriteMessages, joinMessages(initial.favoriteMessages()), x, y + 12, 376, "frase 1 | frase 2");
+        likedMessages = box(likedMessages, joinMessages(initial.likedMessages()), x, y + 44, 376, "frase 1 | frase 2");
+        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 76, 376, "frase 1 | frase 2");
+        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 108, 376, "frase 1 | frase 2");
+        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 140, 183, "frase 1 | frase 2");
+        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 193, y + 140, 183, "frase 1 | frase 2");
     }
 
     private EditBox box(EditBox existing, String value, int x, int y, int width, String hint) {
@@ -143,24 +155,28 @@ public class NpcGiftEditorScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
-        int x = width / 2 - 170;
-        int y = height / 2 - 112;
-        graphics.drawString(font, title, width / 2 - font.width(title) / 2, y - 13, 0xFFFFFF);
+        int panelX = (width - PANEL_WIDTH) / 2;
+        int panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        int x = panelX + 22;
+        int y = panelY + 68;
+        NpcUiTheme.panel(graphics, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
+        NpcUiTheme.title(graphics, font, title, width / 2, panelY + 12);
+        NpcUiTheme.section(graphics, panelX + 14, y - 8, PANEL_WIDTH - 28, 176);
         if (page == Page.ITEMS) {
-            graphics.drawString(font, "Favoritos (IDs separados por coma)", x, y + 23, 0xA0FFA0);
-            graphics.drawString(font, "Gustan (IDs separados por coma)", x, y + 63, 0xA0A0FF);
+            NpcUiTheme.label(graphics, font, "Favoritos (IDs separados por coma)", x, y);
+            NpcUiTheme.label(graphics, font, "Gustan (IDs separados por coma)", x, y + 40);
         } else if (page == Page.REWARDS) {
-            graphics.drawString(font, "Prob. recompensa %", x, y + 23, 0xA0A0A0);
-            graphics.drawString(font, "Cooldown", x + 110, y + 23, 0xA0A0A0);
-            graphics.drawString(font, "Recompensas: minecraft:item:min:max:peso; ...", x, y + 67, 0xA0A0A0);
+            NpcUiTheme.label(graphics, font, "Prob. recompensa %", x, y);
+            NpcUiTheme.label(graphics, font, "Cooldown", x + 140, y);
+            NpcUiTheme.label(graphics, font, "Recompensas · minecraft:item:min:max:peso; ...", x, y + 44);
         } else {
-            graphics.drawString(font, "Mensajes separados con | para cada resultado", x, y + 23, 0xA0A0A0);
-            graphics.drawString(font, "favorite", x + 345, y + 47, 0xA0FFA0);
-            graphics.drawString(font, "liked", x + 345, y + 77, 0xA0A0FF);
-            graphics.drawString(font, "unknown", x + 345, y + 107, 0xA0A0A0);
-            graphics.drawString(font, "cooldown", x + 345, y + 137, 0xA0A0A0);
-            graphics.drawString(font, "reward / noReward", x, y + 157, 0xA0A0A0);
+            NpcUiTheme.label(graphics, font, "Favoritos · separa variantes con |", x, y);
+            NpcUiTheme.label(graphics, font, "Gustados", x, y + 32);
+            NpcUiTheme.label(graphics, font, "Desconocidos", x, y + 64);
+            NpcUiTheme.label(graphics, font, "En cooldown", x, y + 96);
+            NpcUiTheme.label(graphics, font, "Con recompensa", x, y + 128);
+            NpcUiTheme.label(graphics, font, "Sin recompensa", x + 193, y + 128);
         }
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 }
