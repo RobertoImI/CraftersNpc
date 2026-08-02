@@ -2,6 +2,7 @@ package org.crafterscr.craftersnpc.client.gui;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.network.chat.Component;
 
 final class NpcUiTheme {
@@ -33,5 +34,11 @@ final class NpcUiTheme {
 
     static void label(GuiGraphics graphics, Font font, String text, int x, int y) {
         graphics.drawString(font, text, x, y, MUTED, false);
+    }
+
+    static void widgets(GuiGraphics graphics, Iterable<Renderable> widgets, int mouseX, int mouseY, float partialTick) {
+        for (Renderable widget : widgets) {
+            widget.render(graphics, mouseX, mouseY, partialTick);
+        }
     }
 }

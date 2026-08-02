@@ -177,6 +177,6 @@ public class NpcGiftEditorScreen extends Screen {
             NpcUiTheme.label(graphics, font, "Con recompensa", x, y + 128);
             NpcUiTheme.label(graphics, font, "Sin recompensa", x + 193, y + 128);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        NpcUiTheme.widgets(graphics, renderables, mouseX, mouseY, partialTick);
     }
 }

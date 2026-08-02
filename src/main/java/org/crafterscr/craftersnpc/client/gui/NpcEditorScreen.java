@@ -122,6 +122,6 @@ public class NpcEditorScreen extends Screen {
         NpcUiTheme.label(graphics, font, "Skin", x, y + 36);
         NpcUiTheme.label(graphics, font, "Velocidad", x, y + 72);
         NpcUiTheme.label(graphics, font, "Ruta asignada", x, y + 108);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        NpcUiTheme.widgets(graphics, renderables, mouseX, mouseY, partialTick);
     }
 }

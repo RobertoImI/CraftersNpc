@@ -159,6 +159,6 @@ public class NpcDialogueEditorScreen extends Screen {
             if (!lines.isEmpty()) graphics.drawString(font, lines.get(0), listX + 4, rowY + 2, 0xFFFFFF);
             if (lines.size() > 1) graphics.drawString(font, lines.get(1), listX + 4, rowY + 12, 0xDDDDDD);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        NpcUiTheme.widgets(graphics, renderables, mouseX, mouseY, partialTick);
     }
 }
