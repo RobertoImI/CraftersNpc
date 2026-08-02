@@ -97,12 +97,12 @@ public class NpcGiftEditorScreen extends Screen {
     }
 
     private void initMessages(int x, int y) {
-        favoriteMessages = box(favoriteMessages, joinMessages(initial.favoriteMessages()), x, y + 12, 376, "frase 1 | frase 2");
-        likedMessages = box(likedMessages, joinMessages(initial.likedMessages()), x, y + 44, 376, "frase 1 | frase 2");
-        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 76, 376, "frase 1 | frase 2");
-        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 108, 376, "frase 1 | frase 2");
-        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 140, 183, "frase 1 | frase 2");
-        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 193, y + 140, 183, "frase 1 | frase 2");
+        favoriteMessages = box(favoriteMessages, joinMessages(initial.favoriteMessages()), x, y + 15, 376, "frase 1, frase 2");
+        likedMessages = box(likedMessages, joinMessages(initial.likedMessages()), x, y + 49, 376, "frase 1, frase 2");
+        unknownMessages = box(unknownMessages, joinMessages(initial.unknownMessages()), x, y + 83, 376, "frase 1, frase 2");
+        cooldownMessages = box(cooldownMessages, joinMessages(initial.cooldownMessages()), x, y + 117, 376, "frase 1, frase 2");
+        rewardMessages = box(rewardMessages, joinMessages(initial.rewardMessages()), x, y + 151, 183, "frase 1, frase 2");
+        noRewardMessages = box(noRewardMessages, joinMessages(initial.noRewardMessages()), x + 193, y + 151, 183, "frase 1, frase 2");
     }
 
     private EditBox box(EditBox existing, String value, int x, int y, int width, String hint) {
@@ -126,9 +126,9 @@ public class NpcGiftEditorScreen extends Screen {
     private boolean selected(Checkbox checkbox, boolean fallback) { return checkbox == null ? fallback : checkbox.selected(); }
     private String value(EditBox box) { return box == null ? "" : box.getValue(); }
     private String join(List<String> values) { return String.join(", ", values); }
-    private String joinMessages(List<String> values) { return String.join(" | ", values); }
+    private String joinMessages(List<String> values) { return String.join(", ", values); }
     private List<String> splitCsv(String value) { return Arrays.stream(value.split(",")).map(String::strip).filter(s -> !s.isBlank()).distinct().toList(); }
-    private List<String> splitMessages(String value) { return Arrays.stream(value.split("\\|")).map(String::strip).filter(s -> !s.isBlank()).toList(); }
+    private List<String> splitMessages(String value) { return Arrays.stream(value.split("[,|]")).map(String::strip).filter(s -> !s.isBlank()).toList(); }
     private double parseDouble(String value, double fallback) { try { return Double.parseDouble(value); } catch (NumberFormatException ignored) { return fallback; } }
     private int parseInt(String value, int fallback) { try { return Integer.parseInt(value); } catch (NumberFormatException ignored) { return fallback; } }
 
@@ -161,7 +161,7 @@ public class NpcGiftEditorScreen extends Screen {
         int y = panelY + 68;
         NpcUiTheme.panel(graphics, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
         NpcUiTheme.title(graphics, font, title, width / 2, panelY + 12);
-        NpcUiTheme.section(graphics, panelX + 14, y - 8, PANEL_WIDTH - 28, 176);
+        NpcUiTheme.section(graphics, panelX + 14, y - 8, PANEL_WIDTH - 28, page == Page.MESSAGES ? 184 : 176);
         if (page == Page.ITEMS) {
             NpcUiTheme.label(graphics, font, "Favoritos (IDs separados por coma)", x, y);
             NpcUiTheme.label(graphics, font, "Gustan (IDs separados por coma)", x, y + 40);
@@ -170,12 +170,12 @@ public class NpcGiftEditorScreen extends Screen {
             NpcUiTheme.label(graphics, font, "Cooldown", x + 140, y);
             NpcUiTheme.label(graphics, font, "Recompensas · minecraft:item:min:max:peso; ...", x, y + 44);
         } else {
-            NpcUiTheme.label(graphics, font, "Favoritos · separa variantes con |", x, y);
-            NpcUiTheme.label(graphics, font, "Gustados", x, y + 32);
-            NpcUiTheme.label(graphics, font, "Desconocidos", x, y + 64);
-            NpcUiTheme.label(graphics, font, "En cooldown", x, y + 96);
-            NpcUiTheme.label(graphics, font, "Con recompensa", x, y + 128);
-            NpcUiTheme.label(graphics, font, "Sin recompensa", x + 193, y + 128);
+            NpcUiTheme.label(graphics, font, "Favoritos · separa variantes con coma", x, y);
+            NpcUiTheme.label(graphics, font, "Gustados", x, y + 34);
+            NpcUiTheme.label(graphics, font, "Desconocidos", x, y + 68);
+            NpcUiTheme.label(graphics, font, "En cooldown", x, y + 102);
+            NpcUiTheme.label(graphics, font, "Con recompensa", x, y + 136);
+            NpcUiTheme.label(graphics, font, "Sin recompensa", x + 193, y + 136);
         }
         NpcUiTheme.widgets(graphics, renderables, mouseX, mouseY, partialTick);
     }

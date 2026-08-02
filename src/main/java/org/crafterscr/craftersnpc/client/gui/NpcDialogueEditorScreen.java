@@ -60,9 +60,10 @@ public class NpcDialogueEditorScreen extends Screen {
         addRenderableWidget(text);
         int smallGap = 6;
         int smallWidth = (editorWidth - smallGap * 2) / 3;
-        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, top + 148, smallWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + smallWidth + smallGap, top + 148, smallWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + (smallWidth + smallGap) * 2, top + 148, smallWidth, 20).build());
+        int actionY = top + 156;
+        addRenderableWidget(Button.builder(Component.literal("Aplicar"), b -> applyEditor()).bounds(editorX, actionY, smallWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Añadir"), b -> addEntry()).bounds(editorX + smallWidth + smallGap, actionY, smallWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Borrar"), b -> deleteEntry()).bounds(editorX + (smallWidth + smallGap) * 2, actionY, smallWidth, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↑"), b -> moveSelected(-1)).bounds(left, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("↓"), b -> moveSelected(1)).bounds(left + 28, height - 58, 24, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Guardar"), b -> save()).bounds(width / 2 - 105, height - 28, 100, 20).build());
