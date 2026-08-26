@@ -1,17 +1,14 @@
 package org.crafterscr.craftersnpc.network;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
-import org.crafterscr.craftersnpc.client.gui.NpcDialogueEditorScreen;
 import org.crafterscr.craftersnpc.dialogue.DialogueBankStorage;
 import org.crafterscr.craftersnpc.dialogue.DialogueEntry;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +49,4 @@ public record OpenNpcDialogueEditorPayload(int entityId, String npcId, String ba
     @Override
     public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
-    public static void handle(OpenNpcDialogueEditorPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcDialogueEditorScreen(payload.entityId(), payload.npcId(), payload.bankId(), payload.entries(), payload.bankIds(), payload.bankEntries())));
-    }
 }

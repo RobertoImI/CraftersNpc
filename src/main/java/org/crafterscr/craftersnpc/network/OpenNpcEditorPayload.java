@@ -1,14 +1,10 @@
 package org.crafterscr.craftersnpc.network;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
-import org.crafterscr.craftersnpc.client.gui.NpcEditorScreen;
-
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, boolean slimModel, double speed,
                                    String temperament, String routeId, boolean nightMode, boolean damageEnabled, java.util.List<String> skinIds, java.util.List<String> routeIds) implements CustomPacketPayload {
@@ -54,8 +50,4 @@ public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, bo
         return TYPE;
     }
 
-    public static void handle(OpenNpcEditorPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcEditorScreen(payload.entityId(), payload.npcId(), payload.skinId(),
-                payload.slimModel(), payload.speed(), payload.temperament(), payload.routeId(), payload.nightMode(), payload.damageEnabled(), payload.skinIds(), payload.routeIds())));
-    }
 }
