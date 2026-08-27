@@ -69,6 +69,8 @@ public class CnpcRenderer extends HumanoidMobRenderer<CnpcEntity, PlayerModel<Cn
 
     @Override
     public ResourceLocation getTextureLocation(CnpcEntity entity) {
-        return SkinTextureManager.resolveTexture(entity.getSkinId());
+        return entity.getSkinUrl().isBlank()
+                ? SkinTextureManager.resolveTexture(entity.getSkinId())
+                : SkinTextureManager.resolveUrlTexture(entity.getSkinUrl());
     }
 }

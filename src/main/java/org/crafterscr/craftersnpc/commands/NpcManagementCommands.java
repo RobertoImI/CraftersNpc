@@ -23,6 +23,7 @@ import net.minecraft.world.phys.*;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.nio.file.Path;
+import java.net.URI;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -38,6 +39,9 @@ final class NpcManagementCommands {
 
     static LiteralArgumentBuilder<CommandSourceStack> registerSkinLooked() {
         return Commands.literal("skin")
+                .then(Commands.literal("url")
+                        .then(Commands.argument("url", StringArgumentType.string())
+                                .executes(ctx -> setSkinUrlLooked(ctx, StringArgumentType.getString(ctx, "url")))))
                 .then(Commands.argument("skin", StringArgumentType.word())
                         .suggests((ctx, builder) -> CnpcCommandSuggestions.suggestSkins(builder))
                         .executes(ctx -> setSkinLooked(ctx, StringArgumentType.getString(ctx, "skin"))));
@@ -124,6 +128,37 @@ final class NpcManagementCommands {
         npc.setSkinId(skin);
         context.getSource().sendSuccess(() -> Component.literal("Skin del CNPC cambiada a: " + skin), true);
         return 1;
+    }
+
+    static int setSkinUrlLooked(CommandContext<CommandSourceStack> context, String url) throws CommandSyntaxException {
+        CnpcEntity npc = CnpcCommandUtils.requireLookedNpc(context);
+        String validatedUrl;
+        try {
+            validatedUrl = validateSkinUrl(url);
+        } catch (IllegalArgumentException exception) {
+            context.getSource().sendFailure(Component.literal(exception.getMessage()));
+            return 0;
+        }
+        npc.setSkinUrl(validatedUrl);
+        context.getSource().sendSuccess(() -> Component.literal("Skin URL del CNPC actualizada. Los clientes la descargarán automáticamente."), true);
+        return 1;
+    }
+
+    private static String validateSkinUrl(String value) {
+        if (value.length() > 2048) {
+            throw new IllegalArgumentException("La URL de la skin es demasiado larga (máximo 2048 caracteres).");
+        }
+        URI uri;
+        try {
+            uri = URI.create(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("La URL de la skin no es válida.");
+        }
+        if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+                || uri.getHost() == null) {
+            throw new IllegalArgumentException("La skin debe usar una URL http o https absoluta.");
+        }
+        return uri.toASCIIString();
     }
 
     static int setSkinById(CommandContext<CommandSourceStack> context, String npcId, String skin) throws CommandSyntaxException {

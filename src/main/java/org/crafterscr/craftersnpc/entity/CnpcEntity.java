@@ -61,6 +61,7 @@ public class CnpcEntity extends PathfinderMob {
     private static final double MIN_WALK_SPEED = 0.05D;
     private static final double MAX_WALK_SPEED = 1.00D;
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> SKIN_URL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
@@ -140,6 +141,7 @@ public class CnpcEntity extends PathfinderMob {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(SKIN_ID, "steve");
+        builder.define(SKIN_URL, "");
         builder.define(NPC_ID, "");
         builder.define(ROUTE_ID, "");
         builder.define(SLIM_MODEL, false);
@@ -959,6 +961,15 @@ public class CnpcEntity extends PathfinderMob {
 
     public void setSkinId(String skinId) {
         entityData.set(SKIN_ID, normalizeId(skinId));
+        entityData.set(SKIN_URL, "");
+    }
+
+    public String getSkinUrl() {
+        return entityData.get(SKIN_URL);
+    }
+
+    public void setSkinUrl(String skinUrl) {
+        entityData.set(SKIN_URL, skinUrl);
     }
 
     public void setNpcId(String npcId) {
@@ -1148,6 +1159,7 @@ public class CnpcEntity extends PathfinderMob {
         super.addAdditionalSaveData(tag);
         NpcDataMigrations.writeCurrentVersion(tag);
         tag.putString("Skin", getSkinId());
+        tag.putString("SkinUrl", getSkinUrl());
         tag.putString("NpcId", getNpcId());
         tag.putString("RouteId", getAssignedRouteId());
         tag.putBoolean("SlimModel", isSlimModel());
@@ -1210,6 +1222,9 @@ public class CnpcEntity extends PathfinderMob {
         super.readAdditionalSaveData(tag);
         NpcDataMigrations.migrateEntityData(tag);
         setSkinId(tag.contains("Skin", Tag.TAG_STRING) ? tag.getString("Skin") : "steve");
+        if (tag.contains("SkinUrl", Tag.TAG_STRING)) {
+            setSkinUrl(tag.getString("SkinUrl"));
+        }
         setNpcId(tag.contains("NpcId", Tag.TAG_STRING) ? tag.getString("NpcId") : "");
         setAssignedRouteId(tag.contains("RouteId", Tag.TAG_STRING) ? tag.getString("RouteId") : "");
         setSlimModel(tag.getBoolean("SlimModel"));
