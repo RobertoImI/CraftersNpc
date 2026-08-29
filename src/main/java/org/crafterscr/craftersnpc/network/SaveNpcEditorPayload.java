@@ -19,7 +19,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.Locale;
 
-public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, String skinId, boolean slimModel, double speed,
+public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, String skinId, boolean useUrlSkin, boolean slimModel, double speed,
                                    String temperament, String routeId, boolean nightMode, boolean damageEnabled) implements CustomPacketPayload {
     private static final int MAX_ID_LENGTH = 64;
     public static final Type<SaveNpcEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "save_npc_editor"));
@@ -29,6 +29,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, S
                 buf.writeUtf(payload.npcId(), MAX_ID_LENGTH);
                 buf.writeUtf(payload.npcName(), CnpcEntity.MAX_DISPLAY_NAME_LENGTH);
                 buf.writeUtf(payload.skinId(), MAX_ID_LENGTH);
+                buf.writeBoolean(payload.useUrlSkin());
                 buf.writeBoolean(payload.slimModel());
                 buf.writeDouble(payload.speed());
                 buf.writeUtf(payload.temperament(), 32);
@@ -36,7 +37,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, S
                 buf.writeBoolean(payload.nightMode());
                 buf.writeBoolean(payload.damageEnabled());
             },
-            buf -> new SaveNpcEditorPayload(buf.readInt(), buf.readUtf(MAX_ID_LENGTH), buf.readUtf(CnpcEntity.MAX_DISPLAY_NAME_LENGTH), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readDouble(),
+            buf -> new SaveNpcEditorPayload(buf.readInt(), buf.readUtf(MAX_ID_LENGTH), buf.readUtf(CnpcEntity.MAX_DISPLAY_NAME_LENGTH), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readBoolean(), buf.readDouble(),
                     buf.readUtf(32), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readBoolean())
     );
 
@@ -82,7 +83,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, S
         npc.setNpcName(payload.npcName());
         String skinId = sanitizeId(payload.skinId());
         String selectedSkinId = skinId.isBlank() ? "steve" : skinId;
-        if (!selectedSkinId.equals(npc.getSkinId())) {
+        if (!payload.useUrlSkin() && (!selectedSkinId.equals(npc.getSkinId()) || !npc.getSkinUrl().isBlank())) {
             npc.setSkinId(selectedSkinId);
         }
         npc.setSlimModel(payload.slimModel());

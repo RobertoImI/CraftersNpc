@@ -19,7 +19,7 @@ public final class ClientPayloadHandlers {
 
     public static void openNpcEditor(OpenNpcEditorPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> Minecraft.getInstance().setScreen(new NpcEditorScreen(payload.entityId(), payload.npcId(), payload.npcName(), payload.skinId(),
-                payload.slimModel(), payload.speed(), payload.temperament(), payload.routeId(), payload.nightMode(), payload.damageEnabled(), payload.skinIds(), payload.routeIds())));
+                payload.hasUrlSkin(), payload.slimModel(), payload.speed(), payload.temperament(), payload.routeId(), payload.nightMode(), payload.damageEnabled(), payload.skinIds(), payload.routeIds())));
     }
 
     public static void openNpcDialogueEditor(OpenNpcDialogueEditorPayload payload, IPayloadContext context) {

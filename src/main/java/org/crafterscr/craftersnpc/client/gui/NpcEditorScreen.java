@@ -28,6 +28,8 @@ public class NpcEditorScreen extends Screen {
     private EditBox npcId;
     private EditBox npcName;
     private String skinId;
+    private final boolean hasUrlSkin;
+    private boolean useUrlSkin;
     private EditBox speed;
     private String routeId;
     private Checkbox slimModel;
@@ -36,7 +38,7 @@ public class NpcEditorScreen extends Screen {
     private Button skinButton;
     private Button routeButton;
 
-    public NpcEditorScreen(int entityId, String npcId, String npcName, String skinId, boolean slimModel, double speed,
+    public NpcEditorScreen(int entityId, String npcId, String npcName, String skinId, boolean hasUrlSkin, boolean slimModel, double speed,
                            String temperament, String routeId, boolean nightMode, boolean damageEnabled,
                            List<String> skinIds, List<String> routeIds) {
         super(Component.literal("Editor de NPC"));
@@ -46,6 +48,8 @@ public class NpcEditorScreen extends Screen {
         this.temperament = CnpcEntity.Temperament.fromId(temperament);
         this.initialDamageEnabled = damageEnabled;
         this.skinId = skinId == null || skinId.isBlank() ? "steve" : skinId;
+        this.hasUrlSkin = hasUrlSkin;
+        this.useUrlSkin = hasUrlSkin;
         this.routeId = routeId == null ? "" : routeId;
         this.skinOptions = optionsWithCurrent(this.skinId, skinIds, false);
         this.routeOptions = optionsWithCurrent(this.routeId, routeIds, true);
@@ -77,7 +81,7 @@ public class NpcEditorScreen extends Screen {
         int columnWidth = 152;
         addLabeledBox(npcName, x, y + 12, columnWidth);
         addLabeledBox(npcId, x, y + 48, columnWidth);
-        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 84, columnWidth, 20).build();
+        skinButton = Button.builder(Component.literal(skinDisplayValue()), b -> cycleSkin()).bounds(x, y + 84, columnWidth, 20).build();
         addRenderableWidget(skinButton);
         addLabeledBox(speed, x, y + 120, columnWidth);
         routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 156, columnWidth, 20).build();
@@ -95,7 +99,18 @@ public class NpcEditorScreen extends Screen {
 
     private void addLabeledBox(EditBox box, int x, int y, int width) { box.setX(x); box.setY(y); box.setWidth(width); addRenderableWidget(box); }
     private String displayValue(String value, String emptyLabel) { return value == null || value.isBlank() ? emptyLabel : value; }
-    private void cycleSkin() { skinId = nextOption(skinOptions, skinId); skinButton.setMessage(Component.literal(displayValue(skinId, "(sin skin)"))); }
+    private String skinDisplayValue() { return useUrlSkin ? "URL" : displayValue(skinId, "(sin skin)"); }
+    private void cycleSkin() {
+        if (useUrlSkin) {
+            useUrlSkin = false;
+            skinId = skinOptions.get(0);
+        } else if (hasUrlSkin && skinOptions.indexOf(skinId) == skinOptions.size() - 1) {
+            useUrlSkin = true;
+        } else {
+            skinId = nextOption(skinOptions, skinId);
+        }
+        skinButton.setMessage(Component.literal(skinDisplayValue()));
+    }
     private void cycleRoute() { routeId = nextOption(routeOptions, routeId); routeButton.setMessage(Component.literal(displayValue(routeId, "(sin ruta)"))); }
     private String nextOption(List<String> options, String current) { return options.get((Math.max(0, options.indexOf(current)) + 1) % options.size()); }
 
@@ -108,7 +123,7 @@ public class NpcEditorScreen extends Screen {
     private void save() {
         double parsedSpeed;
         try { parsedSpeed = Double.parseDouble(speed.getValue()); } catch (NumberFormatException ignored) { parsedSpeed = CnpcEntity.DEFAULT_WALK_SPEED; }
-        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), npcName.getValue(), skinId, slimModel.selected(), parsedSpeed,
+        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), npcName.getValue(), skinId, useUrlSkin, slimModel.selected(), parsedSpeed,
                 temperament.id(), routeId, nightMode.selected(), initialDamageEnabled));
         onClose();
     }
