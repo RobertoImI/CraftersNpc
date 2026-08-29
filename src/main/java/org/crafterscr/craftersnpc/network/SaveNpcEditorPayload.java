@@ -19,7 +19,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.Locale;
 
-public record SaveNpcEditorPayload(int entityId, String npcId, String skinId, boolean slimModel, double speed,
+public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, String skinId, boolean slimModel, double speed,
                                    String temperament, String routeId, boolean nightMode, boolean damageEnabled) implements CustomPacketPayload {
     private static final int MAX_ID_LENGTH = 64;
     public static final Type<SaveNpcEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "save_npc_editor"));
@@ -27,6 +27,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String skinId, bo
             (buf, payload) -> {
                 buf.writeInt(payload.entityId());
                 buf.writeUtf(payload.npcId(), MAX_ID_LENGTH);
+                buf.writeUtf(payload.npcName(), CnpcEntity.MAX_DISPLAY_NAME_LENGTH);
                 buf.writeUtf(payload.skinId(), MAX_ID_LENGTH);
                 buf.writeBoolean(payload.slimModel());
                 buf.writeDouble(payload.speed());
@@ -35,7 +36,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String skinId, bo
                 buf.writeBoolean(payload.nightMode());
                 buf.writeBoolean(payload.damageEnabled());
             },
-            buf -> new SaveNpcEditorPayload(buf.readInt(), buf.readUtf(MAX_ID_LENGTH), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readDouble(),
+            buf -> new SaveNpcEditorPayload(buf.readInt(), buf.readUtf(MAX_ID_LENGTH), buf.readUtf(CnpcEntity.MAX_DISPLAY_NAME_LENGTH), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readDouble(),
                     buf.readUtf(32), buf.readUtf(MAX_ID_LENGTH), buf.readBoolean(), buf.readBoolean())
     );
 
@@ -78,6 +79,7 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String skinId, bo
         }
 
         npc.setNpcId(newNpcId);
+        npc.setNpcName(payload.npcName());
         String skinId = sanitizeId(payload.skinId());
         npc.setSkinId(skinId.isBlank() ? "steve" : skinId);
         npc.setSlimModel(payload.slimModel());

@@ -18,7 +18,7 @@ import java.util.Locale;
 
 public class NpcEditorScreen extends Screen {
     private static final int PANEL_WIDTH = 360;
-    private static final int PANEL_HEIGHT = 238;
+    private static final int PANEL_HEIGHT = 274;
     private final int entityId;
     private final boolean initialSlimModel;
     private final boolean initialNightMode;
@@ -26,6 +26,7 @@ public class NpcEditorScreen extends Screen {
     private final List<String> skinOptions;
     private final List<String> routeOptions;
     private EditBox npcId;
+    private EditBox npcName;
     private String skinId;
     private EditBox speed;
     private String routeId;
@@ -35,7 +36,7 @@ public class NpcEditorScreen extends Screen {
     private Button skinButton;
     private Button routeButton;
 
-    public NpcEditorScreen(int entityId, String npcId, String skinId, boolean slimModel, double speed,
+    public NpcEditorScreen(int entityId, String npcId, String npcName, String skinId, boolean slimModel, double speed,
                            String temperament, String routeId, boolean nightMode, boolean damageEnabled,
                            List<String> skinIds, List<String> routeIds) {
         super(Component.literal("Editor de NPC"));
@@ -50,6 +51,10 @@ public class NpcEditorScreen extends Screen {
         this.routeOptions = optionsWithCurrent(this.routeId, routeIds, true);
         this.npcId = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Id"));
         this.npcId.setValue(npcId);
+        this.npcName = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Nombre"));
+        this.npcName.setMaxLength(CnpcEntity.MAX_DISPLAY_NAME_LENGTH);
+        this.npcName.setValue(npcName);
+        this.npcName.setHint(Component.literal(CnpcEntity.DEFAULT_DISPLAY_NAME));
         this.speed = new EditBox(Minecraft.getInstance().font, 0, 0, 120, 20, Component.literal("Velocidad"));
         this.speed.setValue(String.format(Locale.ROOT, "%.2f", speed));
     }
@@ -70,11 +75,12 @@ public class NpcEditorScreen extends Screen {
         int x = panelX + 18;
         int y = panelY + 38;
         int columnWidth = 152;
-        addLabeledBox(npcId, x, y + 12, columnWidth);
-        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 48, columnWidth, 20).build();
+        addLabeledBox(npcName, x, y + 12, columnWidth);
+        addLabeledBox(npcId, x, y + 48, columnWidth);
+        skinButton = Button.builder(Component.literal(displayValue(skinId, "(sin skin)")), b -> cycleSkin()).bounds(x, y + 84, columnWidth, 20).build();
         addRenderableWidget(skinButton);
-        addLabeledBox(speed, x, y + 84, columnWidth);
-        routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 120, columnWidth, 20).build();
+        addLabeledBox(speed, x, y + 120, columnWidth);
+        routeButton = Button.builder(Component.literal(displayValue(routeId, "(sin ruta)")), b -> cycleRoute()).bounds(x, y + 156, columnWidth, 20).build();
         addRenderableWidget(routeButton);
         int rightX = x + 174;
         slimModel = Checkbox.builder(Component.literal("Modelo slim"), font).pos(rightX, y + 12).selected(this.slimModel == null ? initialSlimModel : this.slimModel.selected()).build();
@@ -102,7 +108,7 @@ public class NpcEditorScreen extends Screen {
     private void save() {
         double parsedSpeed;
         try { parsedSpeed = Double.parseDouble(speed.getValue()); } catch (NumberFormatException ignored) { parsedSpeed = CnpcEntity.DEFAULT_WALK_SPEED; }
-        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), skinId, slimModel.selected(), parsedSpeed,
+        PacketDistributor.sendToServer(new SaveNpcEditorPayload(entityId, npcId.getValue(), npcName.getValue(), skinId, slimModel.selected(), parsedSpeed,
                 temperament.id(), routeId, nightMode.selected(), initialDamageEnabled));
         onClose();
     }
@@ -116,12 +122,13 @@ public class NpcEditorScreen extends Screen {
         int y = panelY + 38;
         NpcUiTheme.panel(graphics, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
         NpcUiTheme.title(graphics, font, title, width / 2, panelY + 12);
-        NpcUiTheme.section(graphics, x - 7, y - 7, 166, 154);
+        NpcUiTheme.section(graphics, x - 7, y - 7, 166, 190);
         NpcUiTheme.section(graphics, x + 167, y - 7, 168, 118);
-        NpcUiTheme.label(graphics, font, "Id del NPC", x, y);
-        NpcUiTheme.label(graphics, font, "Skin", x, y + 36);
-        NpcUiTheme.label(graphics, font, "Velocidad", x, y + 72);
-        NpcUiTheme.label(graphics, font, "Ruta asignada", x, y + 108);
+        NpcUiTheme.label(graphics, font, "Nombre (por defecto: Humanoid)", x, y);
+        NpcUiTheme.label(graphics, font, "Id del NPC", x, y + 36);
+        NpcUiTheme.label(graphics, font, "Skin", x, y + 72);
+        NpcUiTheme.label(graphics, font, "Velocidad", x, y + 108);
+        NpcUiTheme.label(graphics, font, "Ruta asignada", x, y + 144);
         NpcUiTheme.widgets(graphics, renderables, mouseX, mouseY, partialTick);
     }
 }

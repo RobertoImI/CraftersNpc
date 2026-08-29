@@ -56,6 +56,8 @@ import java.util.UUID;
 
 public class CnpcEntity extends PathfinderMob {
     public static final double DEFAULT_WALK_SPEED = 0.25D;
+    public static final String DEFAULT_DISPLAY_NAME = "Humanoid";
+    public static final int MAX_DISPLAY_NAME_LENGTH = 64;
     public static final int MAX_DIALOGUE_PHRASES = 256;
     public static final int MAX_DIALOGUE_PHRASE_LENGTH = 1024;
     private static final double MIN_WALK_SPEED = 0.05D;
@@ -63,6 +65,7 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> SKIN_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> SKIN_URL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> NPC_NAME = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> ROUTE_ID = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> SLIM_MODEL = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<String> TEMPERAMENT = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
@@ -143,6 +146,7 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(SKIN_ID, "steve");
         builder.define(SKIN_URL, "");
         builder.define(NPC_ID, "");
+        builder.define(NPC_NAME, "");
         builder.define(ROUTE_ID, "");
         builder.define(SLIM_MODEL, false);
         builder.define(TEMPERAMENT, Temperament.PACIFICO.id);
@@ -877,12 +881,13 @@ public class CnpcEntity extends PathfinderMob {
         return socialController.presetConfig();
     }
 
-    public void applyPresetData(String npcId, String skinId, boolean slimModel, Temperament temperament, double walkSpeed,
+    public void applyPresetData(String npcId, String npcName, String skinId, boolean slimModel, Temperament temperament, double walkSpeed,
                                 String assignedRouteId, boolean routeEnabled, boolean nightModeOnly, List<DialogueEntry> dialogues,
                                 List<RoutePoint> presetRoute, List<NpcScheduleEntry> scheduleEntries, List<RoutePoint> nightRefuges,
                                 JsonObject socialConfig) {
         finishCurrentAction();
         setNpcId(npcId);
+        setNpcName(npcName);
         setSkinId(skinId);
         setSlimModel(slimModel);
         setTemperament(temperament);
@@ -983,6 +988,22 @@ public class CnpcEntity extends PathfinderMob {
 
     public String getNpcId() {
         return entityData.get(NPC_ID);
+    }
+
+    public void setNpcName(String npcName) {
+        String normalized = npcName == null ? "" : npcName.strip().replaceAll("\\p{Cc}", "");
+        entityData.set(NPC_NAME, normalized.length() > MAX_DISPLAY_NAME_LENGTH
+                ? normalized.substring(0, MAX_DISPLAY_NAME_LENGTH) : normalized);
+    }
+
+    public String getNpcName() {
+        return entityData.get(NPC_NAME);
+    }
+
+    @Override
+    public net.minecraft.network.chat.Component getName() {
+        String npcName = getNpcName();
+        return net.minecraft.network.chat.Component.literal(npcName.isBlank() ? DEFAULT_DISPLAY_NAME : npcName);
     }
 
     public void setAssignedRouteId(String routeId) {
@@ -1161,6 +1182,7 @@ public class CnpcEntity extends PathfinderMob {
         tag.putString("Skin", getSkinId());
         tag.putString("SkinUrl", getSkinUrl());
         tag.putString("NpcId", getNpcId());
+        tag.putString("NpcName", getNpcName());
         tag.putString("RouteId", getAssignedRouteId());
         tag.putBoolean("SlimModel", isSlimModel());
         tag.putBoolean("RouteEnabled", routeEnabled);
@@ -1226,6 +1248,7 @@ public class CnpcEntity extends PathfinderMob {
             setSkinUrl(tag.getString("SkinUrl"));
         }
         setNpcId(tag.contains("NpcId", Tag.TAG_STRING) ? tag.getString("NpcId") : "");
+        setNpcName(tag.contains("NpcName", Tag.TAG_STRING) ? tag.getString("NpcName") : "");
         setAssignedRouteId(tag.contains("RouteId", Tag.TAG_STRING) ? tag.getString("RouteId") : "");
         setSlimModel(tag.getBoolean("SlimModel"));
         routeEnabled = tag.getBoolean("RouteEnabled");

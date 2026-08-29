@@ -95,6 +95,7 @@ public final class NpcPresetStorage {
         JsonObject root = new JsonObject();
         root.addProperty("version", 1);
         root.addProperty("npcId", npc.getNpcId());
+        root.addProperty("npcName", npc.getNpcName());
         root.addProperty("skinId", npc.getSkinId());
         root.addProperty("slimModel", npc.isSlimModel());
         root.addProperty("temperament", npc.getTemperament().id());
@@ -115,7 +116,7 @@ public final class NpcPresetStorage {
         validate(root);
         importAssignedRoutes(level, root);
         npc.applyPresetData(
-                string(root, "npcId"), string(root, "skinId"), bool(root, "slimModel"),
+                string(root, "npcId"), optionalString(root, "npcName"), string(root, "skinId"), bool(root, "slimModel"),
                 CnpcEntity.Temperament.fromId(string(root, "temperament")), number(root, "walkSpeed"),
                 optionalString(root, "assignedRouteId"), optionalBool(root, "routeEnabled"), optionalBool(root, "nightModeOnly"),
                 readDialogues(root.getAsJsonArray("dialogues")), readRoute(root.getAsJsonArray("route"), MAX_ROUTE_POINTS),

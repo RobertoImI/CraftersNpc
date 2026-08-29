@@ -1,18 +1,20 @@
 package org.crafterscr.craftersnpc.network;
 
 import org.crafterscr.craftersnpc.CraftersNpc;
+import org.crafterscr.craftersnpc.entity.CnpcEntity;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, boolean slimModel, double speed,
+public record OpenNpcEditorPayload(int entityId, String npcId, String npcName, String skinId, boolean slimModel, double speed,
                                    String temperament, String routeId, boolean nightMode, boolean damageEnabled, java.util.List<String> skinIds, java.util.List<String> routeIds) implements CustomPacketPayload {
     public static final Type<OpenNpcEditorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(CraftersNpc.MODID, "open_npc_editor"));
     public static final StreamCodec<FriendlyByteBuf, OpenNpcEditorPayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
                 buf.writeInt(payload.entityId());
                 buf.writeUtf(payload.npcId(), 64);
+                buf.writeUtf(payload.npcName(), CnpcEntity.MAX_DISPLAY_NAME_LENGTH);
                 buf.writeUtf(payload.skinId(), 64);
                 buf.writeBoolean(payload.slimModel());
                 buf.writeDouble(payload.speed());
@@ -28,6 +30,7 @@ public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, bo
             buf -> {
                 int entityId = buf.readInt();
                 String npcId = buf.readUtf(64);
+                String npcName = buf.readUtf(CnpcEntity.MAX_DISPLAY_NAME_LENGTH);
                 String skinId = buf.readUtf(64);
                 boolean slimModel = buf.readBoolean();
                 double speed = buf.readDouble();
@@ -41,7 +44,7 @@ public record OpenNpcEditorPayload(int entityId, String npcId, String skinId, bo
                 int routeSize = Math.min(buf.readVarInt(), 512);
                 java.util.List<String> routeIds = new java.util.ArrayList<>(routeSize);
                 for (int index = 0; index < routeSize; index++) routeIds.add(buf.readUtf(64));
-                return new OpenNpcEditorPayload(entityId, npcId, skinId, slimModel, speed, temperament, routeId, nightMode, damageEnabled, skinIds, routeIds);
+                return new OpenNpcEditorPayload(entityId, npcId, npcName, skinId, slimModel, speed, temperament, routeId, nightMode, damageEnabled, skinIds, routeIds);
             }
     );
 
