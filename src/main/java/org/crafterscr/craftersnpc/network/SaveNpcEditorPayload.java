@@ -81,7 +81,10 @@ public record SaveNpcEditorPayload(int entityId, String npcId, String npcName, S
         npc.setNpcId(newNpcId);
         npc.setNpcName(payload.npcName());
         String skinId = sanitizeId(payload.skinId());
-        npc.setSkinId(skinId.isBlank() ? "steve" : skinId);
+        String selectedSkinId = skinId.isBlank() ? "steve" : skinId;
+        if (!selectedSkinId.equals(npc.getSkinId())) {
+            npc.setSkinId(selectedSkinId);
+        }
         npc.setSlimModel(payload.slimModel());
         npc.setWalkSpeed(Double.isFinite(payload.speed()) ? Mth.clamp(payload.speed(), 0.05D, 1.0D) : CnpcEntity.DEFAULT_WALK_SPEED);
         npc.setTemperament(CnpcEntity.Temperament.fromId(payload.temperament()));
