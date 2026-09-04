@@ -83,20 +83,13 @@ public class CnpcRenderer
                         : wideModel;
 
         /*
-         * Este hook será utilizado posteriormente
-         * por CraftersNpcAnimations para aplicar
-         * el "body/root" de PlayerAnimator.
+         * IMPORTANTE:
          *
-         * Sin el addon no modifica nada.
+         * Ya NO aplicamos aquí el root del emote.
+         *
+         * Debe aplicarse dentro de setupRotations(),
+         * exactamente igual que en AnimatedNpcRenderer.
          */
-        poseStack.pushPose();
-
-        CnpcAnimationHooks.applyRootAnimation(
-                entity,
-                partialTicks,
-                poseStack
-        );
-
         super.render(
                 entity,
                 entityYaw,
@@ -106,17 +99,52 @@ public class CnpcRenderer
                 packedLight
         );
 
-        poseStack.popPose();
-
         /*
-         * El diálogo queda fuera de la transformación
-         * del emote para que no baile junto al NPC.
+         * El diálogo se renderiza aparte y no recibe
+         * la transformación del emote.
          */
         renderDialogue(
                 entity,
                 poseStack,
                 buffer,
                 packedLight
+        );
+    }
+
+    /*
+     * ==========================================
+     * ROOT / BODY DE PLAYERANIMATOR
+     * ==========================================
+     *
+     * Minecraft primero aplica sus rotaciones normales.
+     * Después el addon puede aplicar la transformación
+     * global del emote.
+     *
+     * Este orden coincide con AnimatedNpcRenderer.
+     */
+    @Override
+    protected void setupRotations(
+            CnpcEntity entity,
+            PoseStack poseStack,
+            float bob,
+            float yBodyRot,
+            float partialTick,
+            float scale
+    ) {
+
+        super.setupRotations(
+                entity,
+                poseStack,
+                bob,
+                yBodyRot,
+                partialTick,
+                scale
+        );
+
+        CnpcAnimationHooks.applyRootAnimation(
+                entity,
+                partialTick,
+                poseStack
         );
     }
 

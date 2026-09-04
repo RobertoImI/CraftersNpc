@@ -75,6 +75,40 @@ public class CnpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> GIFT_LIKED_ITEMS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> GIFT_FAVORITE_ITEMS = SynchedEntityData.defineId(CnpcEntity.class, EntityDataSerializers.STRING);
 
+    /*
+     * ==========================================
+     * ESTADO DE ANIMACIÓN EXTERNA
+     * ==========================================
+     *
+     * Estos datos no dependen de CraftersNpcAnimations.
+     *
+     * CraftersNpc simplemente almacena y sincroniza
+     * qué animación externa tiene activa el NPC.
+     */
+    private static final EntityDataAccessor<String> ANIMATION_ID =
+            SynchedEntityData.defineId(
+                    CnpcEntity.class,
+                    EntityDataSerializers.STRING
+            );
+
+    private static final EntityDataAccessor<Boolean> ANIMATION_LOOP =
+            SynchedEntityData.defineId(
+                    CnpcEntity.class,
+                    EntityDataSerializers.BOOLEAN
+            );
+
+    private static final EntityDataAccessor<Long> ANIMATION_START =
+            SynchedEntityData.defineId(
+                    CnpcEntity.class,
+                    EntityDataSerializers.LONG
+            );
+
+    private static final EntityDataAccessor<Float> ANIMATION_YAW =
+            SynchedEntityData.defineId(
+                    CnpcEntity.class,
+                    EntityDataSerializers.FLOAT
+            );
+
     private final List<RoutePoint> route = new ArrayList<>();
     private final List<RoutePoint> nightRefugePoints = new ArrayList<>();
     private final List<NpcScheduleEntry> schedule = new ArrayList<>();
@@ -119,10 +153,10 @@ public class CnpcEntity extends PathfinderMob {
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
-            .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, DEFAULT_WALK_SPEED)
-            .add(Attributes.ATTACK_DAMAGE, 3.0D)
-            .add(Attributes.FOLLOW_RANGE, 24.0D);
+                .add(Attributes.MAX_HEALTH, 20.0D)
+                .add(Attributes.MOVEMENT_SPEED, DEFAULT_WALK_SPEED)
+                .add(Attributes.ATTACK_DAMAGE, 3.0D)
+                .add(Attributes.FOLLOW_RANGE, 24.0D);
     }
 
     @Override
@@ -155,11 +189,53 @@ public class CnpcEntity extends PathfinderMob {
         builder.define(GIFTS_ENABLED, false);
         builder.define(GIFT_LIKED_ITEMS, "");
         builder.define(GIFT_FAVORITE_ITEMS, "");
+        builder.define(
+                ANIMATION_YAW,
+                0.0F
+        );
+
+        builder.define(
+                ANIMATION_ID,
+                ""
+        );
+
+        builder.define(
+                ANIMATION_LOOP,
+                false
+        );
+
+        builder.define(
+                ANIMATION_START,
+                0L
+        );
     }
 
     @Override
     public void tick() {
         super.tick();
+
+        /*
+         * Mientras exista un emote activo, PlayerAnimator debe tener
+         * prioridad visual sobre la IA normal del NPC.
+         *
+         * Los goals vanilla (LookAtPlayerGoal, RandomLookAroundGoal),
+         * LookControl, rutas y reacciones pueden modificar la orientación.
+         * Por eso restauramos la rotación bloqueada después de super.tick().
+         */
+        if (isAnimationPlaying()) {
+            lockAnimationRotation();
+
+            if (!level().isClientSide) {
+                /*
+                 * El NPC permanece en su posición durante el emote.
+                 * No avanzamos rutas, reacciones ni diálogos que puedan
+                 * modificar su mirada/orientación.
+                 */
+                getNavigation().stop();
+                return;
+            }
+        }
+
         if (!level().isClientSide) {
             if (tickDialogue()) {
                 return;
@@ -548,10 +624,10 @@ public class CnpcEntity extends PathfinderMob {
         Direction direction = Direction.getNearest(facing.x, 0.0D, facing.z);
         BlockPos origin = blockPosition();
         BlockPos[] candidates = new BlockPos[] {
-            origin.relative(direction),
-            origin.above().relative(direction),
-            origin,
-            origin.above()
+                origin.relative(direction),
+                origin.above().relative(direction),
+                origin,
+                origin.above()
         };
 
         for (BlockPos candidate : candidates) {
@@ -725,10 +801,10 @@ public class CnpcEntity extends PathfinderMob {
 
         int dayTime = (int) Math.floorMod(level().getDayTime(), NpcScheduleEntry.DAY_TICKS);
         String effectiveRouteId = schedule.stream()
-            .filter(entry -> entry.contains(dayTime))
-            .map(NpcScheduleEntry::routeId)
-            .findFirst()
-            .orElseGet(() -> fallbackRouteId(dayTime));
+                .filter(entry -> entry.contains(dayTime))
+                .map(NpcScheduleEntry::routeId)
+                .findFirst()
+                .orElseGet(() -> fallbackRouteId(dayTime));
         if (!effectiveRouteId.equals(activeScheduleRouteId)) {
             switchEffectiveRoute(effectiveRouteId);
         }
@@ -741,9 +817,9 @@ public class CnpcEntity extends PathfinderMob {
         }
 
         return schedule.stream()
-            .min(Comparator.comparingInt(entry -> Math.floorMod(dayTime - entry.endTime(), NpcScheduleEntry.DAY_TICKS)))
-            .map(NpcScheduleEntry::routeId)
-            .orElse("");
+                .min(Comparator.comparingInt(entry -> Math.floorMod(dayTime - entry.endTime(), NpcScheduleEntry.DAY_TICKS)))
+                .map(NpcScheduleEntry::routeId)
+                .orElse("");
     }
 
     private void switchEffectiveRoute(String routeId) {
@@ -772,8 +848,8 @@ public class CnpcEntity extends PathfinderMob {
                 if (stored != cachedStoredRouteSource) {
                     cachedStoredRouteSource = stored;
                     cachedRoute = stored.stream()
-                        .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks()), p.actionId(), p.actionParameters()))
-                        .toList();
+                            .map(p -> new RoutePoint(new Vec3(p.x(), p.y(), p.z()), normalizeWaitTicks(p.waitTicks()), p.actionId(), p.actionParameters()))
+                            .toList();
                 }
                 return cachedRoute;
             }
@@ -1040,6 +1116,225 @@ public class CnpcEntity extends PathfinderMob {
         entityData.set(SLIM_MODEL, slimModel);
     }
 
+    /*
+     * ==========================================
+     * ANIMACIONES EXTERNAS
+     * ==========================================
+     */
+
+    public String getAnimationId() {
+        return entityData.get(
+                ANIMATION_ID
+        );
+    }
+
+    public boolean isAnimationLooping() {
+        return entityData.get(
+                ANIMATION_LOOP
+        );
+    }
+
+    public long getAnimationStart() {
+        return entityData.get(
+                ANIMATION_START
+        );
+    }
+
+    public float getAnimationYaw() {
+        return entityData.get(
+                ANIMATION_YAW
+        );
+    }
+
+    public boolean isAnimationPlaying() {
+        return !getAnimationId()
+                .isBlank();
+    }
+
+    /*
+     * Inicia una animación.
+     *
+     * CraftersNpc NO sabe cómo renderizarla.
+     * Únicamente sincroniza el estado.
+     *
+     * El addon CraftersNpcAnimations será quien
+     * interprete animationId.
+     */
+    public void playAnimation(
+            String animationId,
+            boolean loop
+    ) {
+
+        if (animationId == null
+                || animationId.isBlank()) {
+
+            stopAnimation();
+            return;
+        }
+
+        /*
+         * Guardamos la orientación VISUAL REAL del cuerpo justo antes
+         * de comenzar el emote.
+         *
+         * yBodyRot representa mejor la dirección que el jugador ve en
+         * pantalla que getYRot(), que puede quedar desfasado respecto
+         * al cuerpo después de que la IA haya mirado a otro lado.
+         */
+        float lockedYaw =
+                yBodyRot;
+
+        /*
+         * Sincronizamos entidad, cuerpo y cabeza con esa dirección antes
+         * de activar el emote para evitar que Minecraft interpole desde
+         * una orientación anterior.
+         */
+        setYRot(
+                lockedYaw
+        );
+
+        yRotO =
+                lockedYaw;
+
+        yBodyRot =
+                lockedYaw;
+
+        yBodyRotO =
+                lockedYaw;
+
+        yHeadRot =
+                lockedYaw;
+
+        yHeadRotO =
+                lockedYaw;
+
+        entityData.set(
+                ANIMATION_YAW,
+                lockedYaw
+        );
+
+        entityData.set(
+                ANIMATION_ID,
+                normalizeId(
+                        animationId
+                )
+        );
+
+        entityData.set(
+                ANIMATION_LOOP,
+                loop
+        );
+
+        entityData.set(
+                ANIMATION_START,
+                level().getGameTime()
+        );
+
+        /*
+         * Detener navegación inmediatamente.
+         */
+        if (!level().isClientSide) {
+
+            getNavigation().stop();
+        }
+
+        lockAnimationRotation();
+    }
+
+    /*
+     * Detiene la animación externa y devuelve el control del NPC
+     * a sus sistemas normales de movimiento, ruta e IA.
+     */
+    public void stopAnimation() {
+        /*
+         * Conservamos como orientación base la dirección actual del NPC
+         * al terminar el emote. Así la IA puede volver a tomar control
+         * sin saltar a una orientación antigua.
+         */
+        float currentYaw =
+                getYRot();
+
+        yBodyRot =
+                currentYaw;
+
+        yBodyRotO =
+                currentYaw;
+
+        yHeadRot =
+                currentYaw;
+
+        yHeadRotO =
+                currentYaw;
+
+        yRotO =
+                currentYaw;
+
+        entityData.set(
+                ANIMATION_ID,
+                ""
+        );
+
+        entityData.set(
+                ANIMATION_LOOP,
+                false
+        );
+
+        entityData.set(
+                ANIMATION_START,
+                0L
+        );
+
+        entityData.set(
+                ANIMATION_YAW,
+                currentYaw
+        );
+
+        if (!level().isClientSide) {
+            resetMovementTracking();
+            reengageRouteNavigation();
+        }
+    }
+
+    /*
+     * Mantiene fija la orientación que tenía el NPC cuando comenzó
+     * el emote. Es necesario bloquear entidad, cuerpo y cabeza porque
+     * Minecraft interpola estas rotaciones de forma independiente.
+     */
+    private void lockAnimationRotation() {
+        float yaw =
+                getAnimationYaw();
+
+        setYRot(
+                yaw
+        );
+
+        yRotO =
+                yaw;
+
+        yBodyRot =
+                yaw;
+
+        yBodyRotO =
+                yaw;
+
+        yHeadRot =
+                yaw;
+
+        yHeadRotO =
+                yaw;
+
+        /*
+         * La inclinación vertical de la cabeza queda neutral como base.
+         * Si el emote anima la cabeza, PlayerAnimator aplicará después
+         * sus propios canales sobre el modelo.
+         */
+        setXRot(
+                0.0F
+        );
+
+        xRotO =
+                0.0F;
+    }
+
     public boolean isNightModeOnly() {
         return nightModeOnly;
     }
@@ -1086,27 +1381,27 @@ public class CnpcEntity extends PathfinderMob {
         List<RoutePoint> points = currentRoute();
         String target = points.isEmpty() ? "none" : formatVec3(currentTargetPos(points));
         return "routeEnabled=" + routeEnabled
-            + ", routeId=" + getAssignedRouteId()
-            + ", effectiveRouteId=" + effectiveRouteId()
-            + ", scheduleEntries=" + schedule.size()
-            + ", routePoints=" + points.size()
-            + ", routeIndex=" + routeIndex
-            + ", movingForward=" + movingForward
-            + ", waitTicks=" + waitTicks
-            + ", repathTicks=" + repathTicks
-            + ", stuckTicks=" + stuckTicks
-            + ", noProgressTicks=" + noProgressTicks
-            + ", nightModeOnly=" + nightModeOnly
-            + ", walkSpeed=" + String.format(Locale.ROOT, "%.2f", walkSpeed)
-            + ", temperament=" + getTemperament().id
-            + ", reaction=" + reactionController.debugState()
-            + ", reactiveTicks=" + reactionController.reactiveTicks()
-            + ", nightState=" + nightModeState
-            + ", nightRefugeIndex=" + nightRefugeIndex
-            + ", nightRefugeCount=" + nightRefugePoints.size()
-            + ", nightReturnRouteIndex=" + nightReturnRouteIndex
-            + ", pos=" + formatVec3(position())
-            + ", target=" + target;
+                + ", routeId=" + getAssignedRouteId()
+                + ", effectiveRouteId=" + effectiveRouteId()
+                + ", scheduleEntries=" + schedule.size()
+                + ", routePoints=" + points.size()
+                + ", routeIndex=" + routeIndex
+                + ", movingForward=" + movingForward
+                + ", waitTicks=" + waitTicks
+                + ", repathTicks=" + repathTicks
+                + ", stuckTicks=" + stuckTicks
+                + ", noProgressTicks=" + noProgressTicks
+                + ", nightModeOnly=" + nightModeOnly
+                + ", walkSpeed=" + String.format(Locale.ROOT, "%.2f", walkSpeed)
+                + ", temperament=" + getTemperament().id
+                + ", reaction=" + reactionController.debugState()
+                + ", reactiveTicks=" + reactionController.reactiveTicks()
+                + ", nightState=" + nightModeState
+                + ", nightRefugeIndex=" + nightRefugeIndex
+                + ", nightRefugeCount=" + nightRefugePoints.size()
+                + ", nightReturnRouteIndex=" + nightReturnRouteIndex
+                + ", pos=" + formatVec3(position())
+                + ", target=" + target;
     }
 
     private String formatVec3(Vec3 vec) {
@@ -1185,6 +1480,27 @@ public class CnpcEntity extends PathfinderMob {
         tag.putString("NpcName", getNpcName());
         tag.putString("RouteId", getAssignedRouteId());
         tag.putBoolean("SlimModel", isSlimModel());
+
+        tag.putString(
+                "ExternalAnimationId",
+                getAnimationId()
+        );
+
+        tag.putBoolean(
+                "ExternalAnimationLoop",
+                isAnimationLooping()
+        );
+
+        tag.putLong(
+                "ExternalAnimationStart",
+                getAnimationStart()
+        );
+
+        tag.putFloat(
+                "ExternalAnimationYaw",
+                getAnimationYaw()
+        );
+
         tag.putBoolean("RouteEnabled", routeEnabled);
         tag.putBoolean("NightModeOnly", nightModeOnly);
         tag.putDouble("WalkSpeed", walkSpeed);
@@ -1251,6 +1567,77 @@ public class CnpcEntity extends PathfinderMob {
         setNpcName(tag.contains("NpcName", Tag.TAG_STRING) ? tag.getString("NpcName") : "");
         setAssignedRouteId(tag.contains("RouteId", Tag.TAG_STRING) ? tag.getString("RouteId") : "");
         setSlimModel(tag.getBoolean("SlimModel"));
+
+        if (
+                tag.contains(
+                        "ExternalAnimationId",
+                        Tag.TAG_STRING
+                )
+        ) {
+
+            entityData.set(
+                    ANIMATION_ID,
+                    tag.getString(
+                            "ExternalAnimationId"
+                    )
+            );
+        }
+
+        if (
+                tag.contains(
+                        "ExternalAnimationLoop",
+                        Tag.TAG_BYTE
+                )
+        ) {
+
+            entityData.set(
+                    ANIMATION_LOOP,
+                    tag.getBoolean(
+                            "ExternalAnimationLoop"
+                    )
+            );
+        }
+
+        if (
+                tag.contains(
+                        "ExternalAnimationStart",
+                        Tag.TAG_LONG
+                )
+        ) {
+
+            entityData.set(
+                    ANIMATION_START,
+                    tag.getLong(
+                            "ExternalAnimationStart"
+                    )
+            );
+        }
+
+        if (
+                tag.contains(
+                        "ExternalAnimationYaw",
+                        Tag.TAG_FLOAT
+                )
+        ) {
+
+            entityData.set(
+                    ANIMATION_YAW,
+                    tag.getFloat(
+                            "ExternalAnimationYaw"
+                    )
+            );
+        } else {
+
+            /*
+             * Compatibilidad con NPCs guardados antes de existir
+             * ExternalAnimationYaw: conservamos su orientación actual.
+             */
+            entityData.set(
+                    ANIMATION_YAW,
+                    getYRot()
+            );
+        }
+
         routeEnabled = tag.getBoolean("RouteEnabled");
         nightModeOnly = tag.getBoolean("NightModeOnly");
         setWalkSpeed(tag.contains("WalkSpeed", Tag.TAG_DOUBLE) ? tag.getDouble("WalkSpeed") : DEFAULT_WALK_SPEED);
@@ -1395,4 +1782,5 @@ public class CnpcEntity extends PathfinderMob {
             this(pos, waitTicks, "", Map.of());
         }
     }
+
 }
