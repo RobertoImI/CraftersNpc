@@ -227,11 +227,28 @@ public class CnpcEntity extends PathfinderMob {
 
             if (!level().isClientSide) {
                 /*
-                 * El NPC permanece en su posición durante el emote.
-                 * No avanzamos rutas, reacciones ni diálogos que puedan
-                 * modificar su mirada/orientación.
+                 * El NPC permanece quieto durante el emote.
                  */
                 getNavigation().stop();
+
+                /*
+                 * IMPORTANTE:
+                 *
+                 * Si el emote pertenece a una acción activa de ruta,
+                 * debemos seguir actualizando routeController.
+                 *
+                 * Así waitTicks continúa bajando y, al llegar a 0,
+                 * finishCurrentAction() ejecuta finish() de la acción
+                 * "emote", que hace stopAnimation(), y la ruta continúa.
+                 *
+                 * En cambio, si el emote fue iniciado manualmente y no
+                 * existe una acción de ruta activa, mantenemos al NPC
+                 * congelado hasta que se use stop.
+                 */
+                if (activeRouteAction != null) {
+                    routeController.tick();
+                }
+
                 return;
             }
         }

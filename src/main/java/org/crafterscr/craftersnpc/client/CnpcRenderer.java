@@ -19,6 +19,8 @@ import net.minecraft.util.FormattedCharSequence;
 
 import java.util.List;
 
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
+
 public class CnpcRenderer
         extends HumanoidMobRenderer<
         CnpcEntity,
@@ -65,6 +67,13 @@ public class CnpcRenderer
                         ),
                         true
                 );
+
+        this.addLayer(
+                new ItemInHandLayer<>(
+                        this,
+                        context.getItemInHandRenderer()
+                )
+        );
     }
 
     @Override

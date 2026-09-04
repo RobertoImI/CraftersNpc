@@ -18,6 +18,7 @@ public final class CnpcCommands {
             .then(Commands.literal("npc")
                 .then(NpcDialogueCommands.register())
                 .then(NpcManagementCommands.registerNpcSkin())
+                    .then(NpcHandCommands.register())
                 .then(NpcRouteCommands.registerNpcRouteAssignment())
                 .then(NpcScheduleCommands.register())
                 .then(NpcSettingsCommands.registerTemperament())
