@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * activo. CnpcEntity retorna antes de tickDialogue() durante un emote, por
  * lo que sin esta corrección el texto quedaba congelado indefinidamente.</p>
  */
-@Mixin(CnpcEntity.class)
+@Mixin(value = CnpcEntity.class, remap = false)
 public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
     @Unique
     private static final String CRAFTERSNPC_FIXED_TAG = "FixedPosition";
