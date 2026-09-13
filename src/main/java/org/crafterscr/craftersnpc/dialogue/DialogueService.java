@@ -16,6 +16,7 @@ public final class DialogueService {
     private static final int PARAGRAPH_MAX_WORDS = 60;
     private static final int EXTRA_WORDS_PER_STEP = 20;
     private static final int MAX_DURATION_SECONDS = 60;
+    private static final String PLAYER_PLACEHOLDER = "@player";
 
     private DialogueService() {
     }
@@ -28,9 +29,32 @@ public final class DialogueService {
 
         int phraseIndex = selectPhraseIndex(npc, entries);
         DialogueEntry entry = entries.get(phraseIndex);
+
+        /*
+         * Conservamos el texto original para el historial/anti-repetición.
+         * La sustitución se hace únicamente sobre la copia que verá el
+         * jugador, por lo que un mismo diálogo funciona para todos.
+         */
+        String displayText = resolvePlaceholders(entry.text(), player);
+
         npc.markDialogueUsed(phraseIndex, entry.text());
-        npc.startDialogue(entry.text(), durationTicks(entry.text()), player);
+        npc.startDialogue(displayText, durationTicks(displayText), player);
         return true;
+    }
+
+    /**
+     * Sustituye placeholders dinámicos del diálogo sin modificar el texto
+     * almacenado en el NPC o en su banco de diálogos.
+     *
+     * Ejemplo:
+     * "Hola @player, bienvenido" -> "Hola Roberto, bienvenido"
+     */
+    public static String resolvePlaceholders(String text, ServerPlayer player) {
+        if (text == null || text.isEmpty() || player == null) {
+            return text == null ? "" : text;
+        }
+
+        return text.replace(PLAYER_PLACEHOLDER, player.getGameProfile().getName());
     }
 
     private static List<DialogueEntry> availableEntries(CnpcEntity npc) {
