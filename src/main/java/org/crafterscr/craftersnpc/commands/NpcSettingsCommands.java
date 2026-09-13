@@ -94,7 +94,11 @@ final class NpcSettingsCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        npc.get().setFixedPosition(enabled);
+        if (!(npc.get() instanceof FixedPositionNpc fixedNpc)) {
+            context.getSource().sendFailure(Component.literal("El soporte de posición fija no está disponible para este NPC."));
+            return 0;
+        }
+        fixedNpc.setFixedPosition(enabled);
         context.getSource().sendSuccess(() -> Component.literal("Posición fija de " + npcId + " = " + (enabled ? "ON" : "OFF")), true);
         return 1;
     }
@@ -106,7 +110,11 @@ final class NpcSettingsCommands {
             context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.literal("Posición fija de " + npcId + ": " + (npc.get().isFixedPosition() ? "ON" : "OFF")), false);
+        if (!(npc.get() instanceof FixedPositionNpc fixedNpc)) {
+            context.getSource().sendFailure(Component.literal("El soporte de posición fija no está disponible para este NPC."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Posición fija de " + npcId + ": " + (fixedNpc.isFixedPosition() ? "ON" : "OFF")), false);
         return 1;
     }
 
