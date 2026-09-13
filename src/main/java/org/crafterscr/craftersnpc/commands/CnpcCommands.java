@@ -23,6 +23,7 @@ public final class CnpcCommands {
                 .then(NpcScheduleCommands.register())
                 .then(NpcSettingsCommands.registerTemperament())
                 .then(NpcSettingsCommands.registerSpeed())
+                .then(NpcSettingsCommands.registerFixed())
                 .then(NpcManagementCommands.registerDebug())
                 .then(NpcManagementCommands.registerUnstick())
                 .then(NpcSettingsCommands.registerNightMode())
