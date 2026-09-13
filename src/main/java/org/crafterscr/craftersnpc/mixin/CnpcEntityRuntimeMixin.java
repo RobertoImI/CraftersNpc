@@ -224,7 +224,7 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
             );
         }
 
-        npc.fallDistance = 0.0F;
+        npc.resetFallDistance();
     }
 
     @Unique
