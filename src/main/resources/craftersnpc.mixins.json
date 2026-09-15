@@ -6,6 +6,9 @@
   "mixins": [
     "CnpcEntityRuntimeMixin"
   ],
+  "client": [
+    "CnpcHeldItemLayerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
