@@ -10,6 +10,7 @@ import org.joml.Matrix4f;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
@@ -115,8 +116,7 @@ public class CnpcRenderer
         renderDialogue(
                 entity,
                 poseStack,
-                buffer,
-                packedLight
+                buffer
         );
     }
 
@@ -160,8 +160,7 @@ public class CnpcRenderer
     private void renderDialogue(
             CnpcEntity entity,
             PoseStack poseStack,
-            MultiBufferSource buffer,
-            int packedLight
+            MultiBufferSource buffer
     ) {
 
         String text =
@@ -254,6 +253,12 @@ public class CnpcRenderer
             float y =
                     index * lineStep;
 
+            /*
+             * NORMAL evita el pase SEE_THROUGH que provocaba letras con
+             * transparencia variable al mover la cámara. FULL_BRIGHT hace
+             * que el texto sea estable e independiente de la iluminación del
+             * mundo, lo que además mejora la compatibilidad con shaders.
+             */
             font.drawInBatch(
                     line,
                     x,
@@ -262,9 +267,9 @@ public class CnpcRenderer
                     false,
                     matrix,
                     buffer,
-                    Font.DisplayMode.SEE_THROUGH,
+                    Font.DisplayMode.NORMAL,
                     0x60000000,
-                    packedLight
+                    LightTexture.FULL_BRIGHT
             );
         }
 
