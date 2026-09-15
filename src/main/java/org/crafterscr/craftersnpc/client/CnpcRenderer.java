@@ -40,6 +40,9 @@ public class CnpcRenderer
     private static final float DIALOGUE_SCALE =
             0.025F;
 
+    private static final int DIALOGUE_BACKGROUND =
+            0x60000000;
+
     private final CnpcPlayerModel wideModel;
     private final CnpcPlayerModel slimModel;
 
@@ -254,10 +257,33 @@ public class CnpcRenderer
                     index * lineStep;
 
             /*
-             * NORMAL evita el pase SEE_THROUGH que provocaba letras con
-             * transparencia variable al mover la cámara. FULL_BRIGHT hace
-             * que el texto sea estable e independiente de la iluminación del
-             * mundo, lo que además mejora la compatibilidad con shaders.
+             * Primera pasada: SEE_THROUGH y FULL_BRIGHT.
+             *
+             * Esta es la que garantiza que la frase completa permanezca
+             * impresa aunque la cámara pase por un ángulo donde el propio NPC,
+             * su objeto o parte del escenario quede entre la cámara y el texto.
+             * No dependemos del depth buffer para decidir qué letras sobreviven.
+             */
+            font.drawInBatch(
+                    line,
+                    x,
+                    y,
+                    0xFFFFFFFF,
+                    false,
+                    matrix,
+                    buffer,
+                    Font.DisplayMode.SEE_THROUGH,
+                    DIALOGUE_BACKGROUND,
+                    LightTexture.FULL_BRIGHT
+            );
+
+            /*
+             * Segunda pasada: NORMAL y FULL_BRIGHT.
+             *
+             * Cuando el texto está realmente visible frente a la geometría,
+             * esta pasada deja los glifos completamente sólidos. Combinada con
+             * la pasada anterior reproduce la estrategia de los name-tags de
+             * Minecraft y evita el efecto de letras que desaparecen al girar.
              */
             font.drawInBatch(
                     line,
@@ -268,7 +294,7 @@ public class CnpcRenderer
                     matrix,
                     buffer,
                     Font.DisplayMode.NORMAL,
-                    0x60000000,
+                    0,
                     LightTexture.FULL_BRIGHT
             );
         }
