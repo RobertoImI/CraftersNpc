@@ -21,6 +21,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>2) Mantiene avanzando el temporizador del texto cuando hay un emote
  * activo. CnpcEntity retorna antes de tickDialogue() durante un emote, por
  * lo que sin esta corrección el texto quedaba congelado indefinidamente.</p>
+ *
+ * <p>3) Recupera automáticamente NPCs de ruta que fueron descargados mientras
+ * ejecutaban un emote. La animación persistida se cancela una sola vez al
+ * volver a tickear y la ruta reconstruye su acción desde el punto guardado.</p>
  */
 @Mixin(value = CnpcEntity.class, remap = false)
 public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
@@ -37,6 +41,11 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
     private boolean craftersnpc$fixedPosition;
     @Unique
     private Vec3 craftersnpc$fixedAnchor = Vec3.ZERO;
+    @Unique
+    private boolean craftersnpc$routeRecoveryPending;
+
+    @Shadow
+    private boolean routeEnabled;
 
     @Shadow
     public abstract boolean isAnimationPlaying();
@@ -49,6 +58,9 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
 
     @Shadow
     public abstract void reengageRouteNavigation();
+
+    @Shadow
+    public abstract void stopAnimation();
 
     @Shadow
     private void setDialogueTicks(int ticks) {
@@ -85,6 +97,7 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
             finishCurrentAction();
             craftersnpc$fixedAnchor = npc.position();
             craftersnpc$fixedPosition = true;
+            craftersnpc$routeRecoveryPending = false;
             npc.getNavigation().stop();
             npc.setDeltaMovement(Vec3.ZERO);
             craftersnpc$enforceAnchor(npc);
@@ -97,10 +110,9 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
     }
 
     /**
-     * Antes del tick normal detenemos cualquier navegación pendiente y,
-     * cuando existe un emote, hacemos avanzar únicamente el reloj del
-     * diálogo. No llamamos reengageRouteNavigation aquí porque el emote
-     * todavía debe conservar prioridad sobre la IA.
+     * Antes del tick normal recuperamos cualquier animación huérfana de una
+     * ruta cargada desde disco, detenemos navegación de NPCs fixed y, cuando
+     * existe un emote, hacemos avanzar únicamente el reloj del diálogo.
      */
     @Inject(method = "tick", at = @At("HEAD"))
     private void craftersnpc$beforeTick(CallbackInfo ci) {
@@ -108,6 +120,23 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
 
         if (npc.level().isClientSide) {
             return;
+        }
+
+        if (craftersnpc$routeRecoveryPending) {
+            craftersnpc$routeRecoveryPending = false;
+
+            if (!craftersnpc$fixedPosition && routeEnabled && isAnimationPlaying()) {
+                /*
+                 * activeRouteAction no se serializa, pero el ID de animación sí.
+                 * Si dejamos esa animación viva, CnpcEntity.tick() retorna antes
+                 * de reconstruir la acción y el NPC queda congelado para siempre.
+                 *
+                 * Al detenerla aquí, el tick normal de ruta puede usar routeIndex
+                 * y waitTicks ya restaurados desde NBT para volver a iniciar la
+                 * acción correspondiente o continuar hacia el siguiente punto.
+                 */
+                stopAnimation();
+            }
         }
 
         if (craftersnpc$fixedPosition) {
@@ -183,6 +212,15 @@ public abstract class CnpcEntityRuntimeMixin implements FixedPositionNpc {
     private void craftersnpc$loadFixedPosition(CompoundTag tag, CallbackInfo ci) {
         CnpcEntity npc = (CnpcEntity) (Object) this;
         craftersnpc$fixedPosition = tag.getBoolean(CRAFTERSNPC_FIXED_TAG);
+
+        /*
+         * La recuperación solo se arma al leer NBT. Así un emote manual
+         * iniciado normalmente sobre un NPC de ruta no se cancela durante
+         * cada tick; únicamente corregimos el estado huérfano tras recarga.
+         */
+        craftersnpc$routeRecoveryPending = !craftersnpc$fixedPosition
+                && routeEnabled
+                && isAnimationPlaying();
 
         if (!craftersnpc$fixedPosition) {
             craftersnpc$fixedAnchor = npc.position();
