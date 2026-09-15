@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.crafterscr.craftersnpc.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CnpcEntityRuntimeMixin"
+  ],
+  "client": [
+    "CnpcHeldItemLayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

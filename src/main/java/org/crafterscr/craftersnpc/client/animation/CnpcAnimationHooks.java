@@ -2,6 +2,7 @@ package org.crafterscr.craftersnpc.client.animation;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.PlayerModel;
+import net.minecraft.world.entity.HumanoidArm;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 public final class CnpcAnimationHooks {
@@ -29,6 +30,23 @@ public final class CnpcAnimationHooks {
         );
     }
 
+    /**
+     * Hook utilizado por la capa de objetos en mano.
+     *
+     * <p>Se mantiene en CraftersNpc como una interfaz neutral para que el mod
+     * base no dependa de PlayerAnimator. CraftersNpcAnimations registra la
+     * implementación real cuando está instalado.</p>
+     */
+    @FunctionalInterface
+    public interface HeldItemHook {
+
+        void apply(
+                CnpcEntity entity,
+                HumanoidArm arm,
+                PoseStack poseStack
+        );
+    }
+
     /*
      * Por defecto no hacen absolutamente nada.
      *
@@ -41,6 +59,14 @@ public final class CnpcAnimationHooks {
 
     private static RootAnimationHook rootHook =
             (entity, partialTicks, poseStack) -> {
+            };
+
+    private static HeldItemHook heldItemBendHook =
+            (entity, arm, poseStack) -> {
+            };
+
+    private static HeldItemHook heldItemTransformHook =
+            (entity, arm, poseStack) -> {
             };
 
     public static void registerModelHook(
@@ -62,6 +88,28 @@ public final class CnpcAnimationHooks {
                 hook != null
                         ? hook
                         : (entity, partialTicks, poseStack) -> {
+                };
+    }
+
+    public static void registerHeldItemBendHook(
+            HeldItemHook hook
+    ) {
+
+        heldItemBendHook =
+                hook != null
+                        ? hook
+                        : (entity, arm, poseStack) -> {
+                };
+    }
+
+    public static void registerHeldItemTransformHook(
+            HeldItemHook hook
+    ) {
+
+        heldItemTransformHook =
+                hook != null
+                        ? hook
+                        : (entity, arm, poseStack) -> {
                 };
     }
 
@@ -87,6 +135,32 @@ public final class CnpcAnimationHooks {
         rootHook.apply(
                 entity,
                 partialTicks,
+                poseStack
+        );
+    }
+
+    public static void applyHeldItemBend(
+            CnpcEntity entity,
+            HumanoidArm arm,
+            PoseStack poseStack
+    ) {
+
+        heldItemBendHook.apply(
+                entity,
+                arm,
+                poseStack
+        );
+    }
+
+    public static void applyHeldItemTransform(
+            CnpcEntity entity,
+            HumanoidArm arm,
+            PoseStack poseStack
+    ) {
+
+        heldItemTransformHook.apply(
+                entity,
+                arm,
                 poseStack
         );
     }

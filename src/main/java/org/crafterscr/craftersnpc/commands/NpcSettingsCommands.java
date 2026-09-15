@@ -42,6 +42,18 @@ final class NpcSettingsCommands {
                                 .executes(ctx -> setWalkSpeed(ctx, StringArgumentType.getString(ctx, "npcId"), DoubleArgumentType.getDouble(ctx, "value")))));
     }
 
+    static LiteralArgumentBuilder<CommandSourceStack> registerFixed() {
+        return Commands.literal("fixed")
+                .then(Commands.argument("npcId", StringArgumentType.word())
+                        .suggests(CnpcCommandSuggestions::suggestNpcIds)
+                        .then(Commands.literal("on")
+                                .executes(ctx -> setFixed(ctx, StringArgumentType.getString(ctx, "npcId"), true)))
+                        .then(Commands.literal("off")
+                                .executes(ctx -> setFixed(ctx, StringArgumentType.getString(ctx, "npcId"), false)))
+                        .then(Commands.literal("status")
+                                .executes(ctx -> fixedStatus(ctx, StringArgumentType.getString(ctx, "npcId")))));
+    }
+
     static LiteralArgumentBuilder<CommandSourceStack> registerDamage() {
         return Commands.literal("damage")
                 .then(Commands.literal("on").executes(ctx -> setNpcDamage(ctx, true)))
@@ -74,6 +86,38 @@ final class NpcSettingsCommands {
                                 .suggests(CnpcCommandSuggestions::suggestNpcIds)
                                 .executes(ctx -> listNightRefuge(ctx, StringArgumentType.getString(ctx, "npcId")))));
     }
+
+    static int setFixed(CommandContext<CommandSourceStack> context, String npcId, boolean enabled) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!(npc.get() instanceof FixedPositionNpc fixedNpc)) {
+            context.getSource().sendFailure(Component.literal("El soporte de posición fija no está disponible para este NPC."));
+            return 0;
+        }
+        fixedNpc.setFixedPosition(enabled);
+        context.getSource().sendSuccess(() -> Component.literal("Posición fija de " + npcId + " = " + (enabled ? "ON" : "OFF")), true);
+        return 1;
+    }
+
+    static int fixedStatus(CommandContext<CommandSourceStack> context, String npcId) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
+        if (npc.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("NPC no encontrado: " + npcId));
+            return 0;
+        }
+        if (!(npc.get() instanceof FixedPositionNpc fixedNpc)) {
+            context.getSource().sendFailure(Component.literal("El soporte de posición fija no está disponible para este NPC."));
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Posición fija de " + npcId + ": " + (fixedNpc.isFixedPosition() ? "ON" : "OFF")), false);
+        return 1;
+    }
+
     static int setNightMode(CommandContext<CommandSourceStack> context, String npcId, boolean enabled) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Optional<CnpcEntity> npc = NpcRegistry.findById(player.getServer(), npcId);
