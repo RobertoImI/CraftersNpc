@@ -43,6 +43,9 @@ public class CnpcRenderer
     private static final int DIALOGUE_BACKGROUND =
             0x60000000;
 
+    private static final float DIALOGUE_CAMERA_OFFSET =
+            0.55F;
+
     private final CnpcPlayerModel wideModel;
     private final CnpcPlayerModel slimModel;
 
@@ -227,6 +230,13 @@ public class CnpcRenderer
                         .cameraOrientation()
         );
 
+        /*
+         * Separar el plano del texto del volumen del NPC hacia la camara.
+         * Con el renderizado NORMAL, la cabeza ya no tapa letras al girar.
+         * El desplazamiento se aplica antes de la escala del texto.
+         */
+        poseStack.translate(0.0F, 0.0F, DIALOGUE_CAMERA_OFFSET);
+
         poseStack.scale(
                 DIALOGUE_SCALE,
                 -DIALOGUE_SCALE,
@@ -257,10 +267,9 @@ public class CnpcRenderer
                     index * lineStep;
 
             /*
-             * Una unica pasada SEE_THROUGH con FULL_BRIGHT.
-             *
-             * Evita superponer texto con modos de profundidad distintos,
-             * manteniendo brillo constante e independencia de la luz del mundo.
+             * Renderizado NORMAL con iluminacion maxima.
+             * Evita la ruta SEE_THROUGH afectada por problemas de profundidad
+             * de etiquetas en Minecraft 1.21.1, sin dibujar el texto dos veces.
              */
             font.drawInBatch(
                     line,
@@ -270,7 +279,7 @@ public class CnpcRenderer
                     false,
                     matrix,
                     buffer,
-                    Font.DisplayMode.SEE_THROUGH,
+                    Font.DisplayMode.NORMAL,
                     DIALOGUE_BACKGROUND,
                     LightTexture.FULL_BRIGHT
             );
