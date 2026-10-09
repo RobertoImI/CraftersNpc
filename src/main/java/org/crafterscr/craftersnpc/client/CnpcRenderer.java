@@ -257,12 +257,10 @@ public class CnpcRenderer
                     index * lineStep;
 
             /*
-             * Primera pasada: SEE_THROUGH y FULL_BRIGHT.
+             * Una unica pasada SEE_THROUGH con FULL_BRIGHT.
              *
-             * Esta es la que garantiza que la frase completa permanezca
-             * impresa aunque la cámara pase por un ángulo donde el propio NPC,
-             * su objeto o parte del escenario quede entre la cámara y el texto.
-             * No dependemos del depth buffer para decidir qué letras sobreviven.
+             * Evita superponer texto con modos de profundidad distintos,
+             * manteniendo brillo constante e independencia de la luz del mundo.
              */
             font.drawInBatch(
                     line,
@@ -274,27 +272,6 @@ public class CnpcRenderer
                     buffer,
                     Font.DisplayMode.SEE_THROUGH,
                     DIALOGUE_BACKGROUND,
-                    LightTexture.FULL_BRIGHT
-            );
-
-            /*
-             * Segunda pasada: NORMAL y FULL_BRIGHT.
-             *
-             * Cuando el texto está realmente visible frente a la geometría,
-             * esta pasada deja los glifos completamente sólidos. Combinada con
-             * la pasada anterior reproduce la estrategia de los name-tags de
-             * Minecraft y evita el efecto de letras que desaparecen al girar.
-             */
-            font.drawInBatch(
-                    line,
-                    x,
-                    y,
-                    0xFFFFFFFF,
-                    false,
-                    matrix,
-                    buffer,
-                    Font.DisplayMode.NORMAL,
-                    0,
                     LightTexture.FULL_BRIGHT
             );
         }
