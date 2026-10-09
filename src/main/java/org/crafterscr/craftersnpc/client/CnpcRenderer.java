@@ -5,6 +5,7 @@ import org.crafterscr.craftersnpc.client.animation.CnpcPlayerModel;
 import org.crafterscr.craftersnpc.entity.CnpcEntity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.joml.Matrix4f;
 
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.network.chat.Component;
@@ -45,6 +47,9 @@ public class CnpcRenderer
 
     private static final float DIALOGUE_CAMERA_OFFSET =
             0.55F;
+
+    // El fondo debe quedar detras de los glifos en lugar de taparlos.
+    private static final float DIALOGUE_BACKGROUND_DEPTH = -1.0F;
 
     private final CnpcPlayerModel wideModel;
     private final CnpcPlayerModel slimModel;
@@ -258,19 +263,26 @@ public class CnpcRenderer
                             index
                     );
 
-            float x =
-                    -font.width(
-                            line
-                    ) / 2.0F;
+            int lineWidth = font.width(line);
+            float x = -lineWidth / 2.0F;
 
             float y =
                     index * lineStep;
 
             /*
-             * Renderizado NORMAL con iluminacion maxima.
-             * Evita la ruta SEE_THROUGH afectada por problemas de profundidad
-             * de etiquetas en Minecraft 1.21.1, sin dibujar el texto dos veces.
+             * El fondo en una geometria separada y atras evita que el fondo
+             * semitransparente atenue o tape fragmentos de los glifos.
+             * NO usar el parametro backgroundColor de drawInBatch en 1.21.1.
              */
+            renderDialogueBackground(
+                    matrix,
+                    buffer,
+                    x,
+                    y,
+                    lineWidth,
+                    font.lineHeight
+            );
+
             font.drawInBatch(
                     line,
                     x,
@@ -280,12 +292,43 @@ public class CnpcRenderer
                     matrix,
                     buffer,
                     Font.DisplayMode.NORMAL,
-                    DIALOGUE_BACKGROUND,
+                    0,
                     LightTexture.FULL_BRIGHT
             );
         }
 
         poseStack.popPose();
+    }
+
+    private static void renderDialogueBackground(
+            Matrix4f matrix,
+            MultiBufferSource buffer,
+            float x,
+            float y,
+            int width,
+            int lineHeight
+    ) {
+        float left = x - 1.0F;
+        float right = x + width + 1.0F;
+        float top = y - 1.0F;
+        float bottom = y + lineHeight;
+
+        // Shader del fondo de textos (POSITION_COLOR_LIGHTMAP).
+        // La profundidad negativa lo coloca detras del texto y evita
+        // que el fondo semitransparente pinte encima de las letras.
+        VertexConsumer vertices = buffer.getBuffer(RenderType.textBackground());
+        vertices.addVertex(matrix, left, bottom, DIALOGUE_BACKGROUND_DEPTH)
+                .setColor(DIALOGUE_BACKGROUND)
+                .setLight(LightTexture.FULL_BRIGHT);
+        vertices.addVertex(matrix, right, bottom, DIALOGUE_BACKGROUND_DEPTH)
+                .setColor(DIALOGUE_BACKGROUND)
+                .setLight(LightTexture.FULL_BRIGHT);
+        vertices.addVertex(matrix, right, top, DIALOGUE_BACKGROUND_DEPTH)
+                .setColor(DIALOGUE_BACKGROUND)
+                .setLight(LightTexture.FULL_BRIGHT);
+        vertices.addVertex(matrix, left, top, DIALOGUE_BACKGROUND_DEPTH)
+                .setColor(DIALOGUE_BACKGROUND)
+                .setLight(LightTexture.FULL_BRIGHT);
     }
 
     @Override
